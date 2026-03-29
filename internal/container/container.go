@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
@@ -25,10 +26,9 @@ import (
 func BuildContainer() *dig.Container {
 	c := dig.New()
 
-	// Provide Config
-	c.Provide(config.Load)
-
-	c.Provide(func(cfg *config.Config) (*zap.Logger, error) {
+	dependencies := []interface{}{
+		config.Load,
+	func(cfg *config.Config) (*zap.Logger, error) {
 		var logger *zap.Logger
 		var err error
 
@@ -45,11 +45,11 @@ func BuildContainer() *dig.Container {
 			return nil, err
 		}
 		return logger, nil
-	})
+	},
 
 
 	// Inside BuildContainer...
-	c.Provide(func() (oteltrace.Tracer, error) {
+func() (oteltrace.Tracer, error) {
 		// 1. Create an exporter (sending to stdout for now)
 		exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
 		if err != nil {
@@ -75,9 +75,9 @@ func BuildContainer() *dig.Container {
 		otel.SetTracerProvider(tp)
 
 		return tp.Tracer("outbox-relay-engine"), nil
-	})
+	},
 
-	c.Provide(func() (metric.Meter, error) {
+func() (metric.Meter, error) {
 		// 1. Create the Prometheus exporter
 		// 1. Tell OTEL to use the Global Prometheus Registerer
         // This is the "magic link" that connects OTEL to promhttp.Handler()
@@ -97,10 +97,10 @@ func BuildContainer() *dig.Container {
         otel.SetMeterProvider(provider)
 
         return provider.Meter("open-outbox-relay"), nil
-	})
+	},
 
 	// Storage Provider
-	c.Provide(func(cfg *config.Config) (relay.Storage, error) {
+	func(cfg *config.Config) (relay.Storage, error) {
 		ctx := context.Background()
 
 		fmt.Printf("This is the type %s\n", cfg.PublisherURL)
@@ -123,10 +123,10 @@ func BuildContainer() *dig.Container {
 		default:
 			return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)
 		}
-	})
+	},
 
 	// Publisher Provider
-	c.Provide(func(cfg *config.Config) (relay.Publisher, error) {
+	func(cfg *config.Config) (relay.Publisher, error) {
 		switch cfg.PublisherType {
 		case "nats":
 			return publishers.NewNats(cfg.PublisherURL)
@@ -144,19 +144,25 @@ func BuildContainer() *dig.Container {
 		default:
 			return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 		}
-	})
+	},
 
 	
 	// Provide Engine
-	c.Provide(func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, meter metric.Meter, tracer oteltrace.Tracer) *relay.Engine {
+	func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, meter metric.Meter, tracer oteltrace.Tracer) *relay.Engine {
 		return relay.NewEngine(s, p, cfg.PollInterval, logger, meter, tracer)
-	})
+	},
 
 		
 	// Provide API Server
-	c.Provide(func(s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
+	func(s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 		return relay.NewServer(s, cfg.ServerPort, logger)
-	})
+	}}
+
+	for _, dependency := range dependencies {
+		if err := c.Provide(dependency); err != nil {
+			log.Fatalf("error in providing dependency: %v\n", err)
+		}
+	}
 
 	return c
 }

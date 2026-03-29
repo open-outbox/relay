@@ -22,7 +22,7 @@ func main() {
 	c := container.BuildContainer()
 
 	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) {
-		defer logger.Sync()
+		defer func() { _ = logger.Sync() }()
 		
 		// Start API (Non-blocking)
 		api.Start()

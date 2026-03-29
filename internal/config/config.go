@@ -47,9 +47,9 @@ func Load() (*Config, error) {
 	// 4. Try to read .env (The local overrides)
 	v.SetConfigFile(".env")
 	v.SetConfigType("env")
-	if err := v.MergeInConfig(); err != nil {
-		// Ignore if .env doesn't exist
-	}
+	// if err := v.MergeInConfig(); err != nil {
+	// 	// Ignore if .env doesn't exist
+	// }
 
 	// 3. Unmarshal into our struct
 	var cfg Config

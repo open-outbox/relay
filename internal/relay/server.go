@@ -40,7 +40,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	// Replace the old line with this:
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		s.logger.Error("failed to encode stats", zap.Error(err))
+	}
 }
 
 // Start starts the server. It does NOT block.
