@@ -1,0 +1,61 @@
+---
+
+volumes:
+  pg_data: {}
+  # redis_data: {}
+
+services:
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    # command:
+    #   - "postgres"
+    #   - "-c"
+    #   - "logging_collector=on"
+    #   - "-c"
+    #   - "log_directory=/var/log/postgresql/"
+    #   - "-c"
+    #   - "log_filename=postgresql.log"
+    #   - "-c"
+    #   - "log_statement=all"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - 5432:5432
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  nats:
+    image: nats:2.9-alpine
+    ports:
+      - "4222:4222" # Client port
+      - "8222:8222" # HTTP Management port
+
+  nats-box:
+    image: natsio/nats-box
+    entrypoint: sleep infinity # Keeps it alive so you can "exec" into it
+    networks:
+      - default
+
+  # redis:
+  #   image: redis:6-alpine
+  #   command: redis-server --appendonly yes
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: nginx
+  #   ports:
+  #     - "8000:80"
+  #   volumes:
+  #     - ./server/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./:/var/log/nginx
+  #   depends_on:
+  #     - backend
+  #     - channels

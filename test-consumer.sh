@@ -1,0 +1,1 @@
+docker compose exec nats-box nats sub -s nats:4222 ">"
