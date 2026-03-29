@@ -7,7 +7,6 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/metric"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -18,37 +17,20 @@ type Engine struct {
 	publisher Publisher
 	interval  time.Duration
 	logger    *zap.Logger
-
-	eventCounter metric.Int64Counter
-	errorCounter metric.Int64Counter
-	latencyGauge metric.Float64Histogram
-	tracer       oteltrace.Tracer
+	metrics   *Metrics
+	tracer    oteltrace.Tracer
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
-func NewEngine(s Storage, p Publisher, interval time.Duration, logger *zap.Logger, meter metric.Meter, tracer oteltrace.Tracer) *Engine {
-
-	// 1. Initialize the Counter
-	eventCounter, _ := meter.Int64Counter("outbox_events_published_total",
-		metric.WithDescription("Total number of events successfully published"))
-
-	// 2. Initialize the Error Counter
-	errorCounter, _ := meter.Int64Counter("outbox_errors_total",
-		metric.WithDescription("Total number of publication failures"))
-
-	// 3. Initialize the Latency Histogram
-	latencyGauge, _ := meter.Float64Histogram("outbox_batch_processing_duration_seconds",
-		metric.WithDescription("Time taken to process a single batch"))
+func NewEngine(s Storage, p Publisher, i time.Duration, l *zap.Logger, m *Metrics, t oteltrace.Tracer) *Engine {
 
 	return &Engine{
-		storage:      s,
-		publisher:    p,
-		interval:     interval,
-		logger:       logger.With(zap.String("module", "engine")),
-		eventCounter: eventCounter,
-		errorCounter: errorCounter,
-		latencyGauge: latencyGauge,
-		tracer:       tracer,
+		storage:   s,
+		publisher: p,
+		interval:  i,
+		logger:    l.With(zap.String("module", "engine")),
+		metrics:   m,
+		tracer:    t,
 	}
 }
 
@@ -98,13 +80,13 @@ func (e *Engine) process(ctx context.Context) error {
 				zap.String("topic", event.Topic),
 				zap.Error(err),
 			)
-			e.errorCounter.Add(ctx, 1)
+			e.metrics.Failed.Add(ctx, 1)
 			// Instead of just 'continue', we tell the DB it failed
 			_ = e.storage.MarkFailed(ctx, event.ID.String(), err.Error())
 			continue
 		}
 
-		e.eventCounter.Add(ctx, 1)
+		e.metrics.Delivered.Add(ctx, 1)
 		e.logger.Info("event published",
 			zap.String("event_id", event.ID.String()),
 			zap.Duration("elapsed", time.Since(event.CreatedAt)),
@@ -120,7 +102,7 @@ func (e *Engine) process(ctx context.Context) error {
 		}
 		childSpan.SetStatus(codes.Ok, "success")
 		childSpan.End() // End child
-		e.latencyGauge.Record(ctx, time.Since(start).Seconds())
+		e.metrics.Latency.Record(ctx, time.Since(start).Seconds())
 	}
 
 	return nil

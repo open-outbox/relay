@@ -19,7 +19,7 @@ func main() {
 	defer stop()
 
 	// 2. Build the DI Container
-	c := container.BuildContainer()
+	c := container.BuildContainer(ctx)
 
 	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) {
 		defer func() { _ = logger.Sync() }()

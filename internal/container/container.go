@@ -24,11 +24,15 @@ import (
 	"go.uber.org/zap"
 )
 
-func BuildContainer() *dig.Container {
+func BuildContainer(rootCtx context.Context) *dig.Container {
 	c := dig.New()
 
 	dependencies := []interface{}{
+		func() context.Context {
+			return rootCtx
+		},
 		config.Load,
+		relay.NewMetrics,
 		func(cfg *config.Config) (*zap.Logger, error) {
 			var logger *zap.Logger
 			var err error
@@ -100,10 +104,7 @@ func BuildContainer() *dig.Container {
 		},
 
 		// Storage Provider
-		func(cfg *config.Config) (relay.Storage, error) {
-			ctx := context.Background()
-
-			fmt.Printf("This is the type %s\n", cfg.PublisherURL)
+		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
 
 			switch cfg.StorageType {
 			case "postgres":
@@ -147,8 +148,8 @@ func BuildContainer() *dig.Container {
 		},
 
 		// Provide Engine
-		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, meter metric.Meter, tracer oteltrace.Tracer) *relay.Engine {
-			return relay.NewEngine(s, p, cfg.PollInterval, logger, meter, tracer)
+		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, metrics *relay.Metrics, tracer oteltrace.Tracer) *relay.Engine {
+			return relay.NewEngine(s, p, cfg.PollInterval, logger, metrics, tracer)
 		},
 
 		// Provide API Server
