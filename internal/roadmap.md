@@ -2,7 +2,7 @@
 
 🟢 Phase 1: Core Infrastructure (The "Skeleton")
 
-[ ] Dependency Injection (uber-go/dig): Refactor main.go to use a container. This allows us to "swap" a NATS publisher for a Kafka one just by changing the provider function.
+[X] Dependency Injection (uber-go/dig): Refactor main.go to use a container. This allows us to "swap" a NATS publisher for a Kafka one just by changing the provider function.
 
 [ ] Structured Logging (uber-go/zap): Move away from log.Printf. We need JSON logging with fields (e.g., {"level":"info", "event_id":"...", "module":"engine"}).
 

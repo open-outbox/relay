@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats.go"
+	"github.com/open-outbox/relay/internal/relay"
 )
 
 type Nats struct {
@@ -21,11 +22,11 @@ func NewNats(url string) (*Nats, error) {
 }
 
 // Publish sends the payload to a NATS subject (topic).
-func (n *Nats) Publish(ctx context.Context, topic string, payload []byte) error {
+func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 	// TODO: 
 	// NATS doesn't natively take a context in the simple Publish call, 
 	// but we can use it for timeout logic if needed.
-	return n.conn.Publish(topic, payload)
+	return n.conn.Publish(event.Topic, event.Payload)
 }
 
 // Close ensures the connection is shut down cleanly.

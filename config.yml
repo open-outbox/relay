@@ -12,3 +12,6 @@
 
 # # API Settings
 # server_port: ":9000"
+
+publisher_type: "redis"
+publisher_url: "redis://localhost:6379"

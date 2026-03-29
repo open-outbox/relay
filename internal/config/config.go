@@ -20,6 +20,7 @@ type Config struct {
 	PollInterval time.Duration `mapstructure:"POLL_INTERVAL"`
 	BatchSize    int           `mapstructure:"BATCH_SIZE"`
 	ServerPort   string        `mapstructure:"SERVER_PORT"`
+	Environment  string		   `mapstructure:"ENVIRONMENT"`
 }
 
 func Load() (*Config, error) {

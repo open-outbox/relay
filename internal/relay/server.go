@@ -3,16 +3,18 @@ package relay
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 type Server struct {
 	storage Storage
 	server  *http.Server
+	logger  *zap.Logger
 }
 
-func NewServer(s Storage, addr string) *Server {
+func NewServer(s Storage, addr string, logger *zap.Logger) *Server {
 	mux := http.NewServeMux()
 	
 	srv := &Server{
@@ -21,6 +23,7 @@ func NewServer(s Storage, addr string) *Server {
 			Addr:    addr,
 			Handler: mux,
 		},
+		logger: logger,
 	}
 
 	mux.HandleFunc("/health", srv.handleHealth)
@@ -41,15 +44,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // Start starts the server. It does NOT block.
 func (s *Server) Start() {
 	go func() {
-		log.Printf("Health API listening on %s", s.server.Addr)
+		s.logger.Info("starting health api", zap.String("addr", s.server.Addr))
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("HTTP server error: %v", err)
+			s.logger.Fatal("http server failed", zap.Error(err))
 		}
 	}()
 }
 
 // Stop gracefully shuts down the server.
 func (s *Server) Stop(ctx context.Context) error {
-	log.Println("Shutting down Health API...")
+	s.logger.Info("Shutting down Health API...")
 	return s.server.Shutdown(ctx)
 }

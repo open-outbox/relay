@@ -10,12 +10,32 @@ import (
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
 	"go.uber.org/dig"
+	"go.uber.org/zap"
 )
 func BuildContainer() *dig.Container {
 	c := dig.New()
 
 	// Provide Config
 	c.Provide(config.Load)
+
+	c.Provide(func(cfg *config.Config) (*zap.Logger, error) {
+		var logger *zap.Logger
+		var err error
+
+		// Switch based on environment logic if you want
+		// Development: Pretty-printed, colorized
+		// Production: Mini-JSON, high performance
+		if cfg.Environment == "production" {
+			logger, err = zap.NewProduction()
+		} else {
+			logger, err = zap.NewDevelopment()
+		}
+		
+		if err != nil {
+			return nil, err
+		}
+		return logger, nil
+	})
 
 	// Storage Provider
 	c.Provide(func(cfg *config.Config) (relay.Storage, error) {
@@ -51,7 +71,10 @@ func BuildContainer() *dig.Container {
 			
 		case "kafka":
 			// return publishers.NewKafka(cfg.KafkaBrokers), nil (To be implemented)
-			return nil, fmt.Errorf("kafka publisher not yet implemented")
+			return publishers.NewKafka(cfg.PublisherURL), nil
+
+		case "redis":
+			return publishers.NewRedis(cfg.PublisherURL)
 			
 		case "stdout":
 			return publishers.NewStdout(), nil

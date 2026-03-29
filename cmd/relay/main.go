@@ -10,6 +10,7 @@ import (
 
 	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -20,7 +21,8 @@ func main() {
 	// 2. Build the DI Container
 	c := container.BuildContainer()
 
-	err := c.Invoke(func(engine *relay.Engine, api *relay.Server) {
+	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) {
+		defer logger.Sync()
 		
 		// Start API (Non-blocking)
 		api.Start()

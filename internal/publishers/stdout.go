@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/open-outbox/relay/internal/relay"
 )
 
 // Stdout represents a publisher that writes to the console.
@@ -16,7 +18,7 @@ func NewStdout() *Stdout {
 
 // Publish satisfies the relay.Publisher interface.
 // It simply writes the bytes to the standard output.
-func (s *Stdout) Publish(ctx context.Context, topic string, payload []byte) error {
-	_, err := fmt.Fprintf(os.Stdout, "TOPIC: %s | PAYLOAD: %s\n", topic, string(payload))
+func (s *Stdout) Publish(ctx context.Context, event relay.Event) error {
+	_, err := fmt.Fprintf(os.Stdout, "TOPIC: %s | PAYLOAD: %s\n", event.Topic, string(event.Payload))
 	return err
 }
