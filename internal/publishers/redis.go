@@ -33,10 +33,10 @@ func NewRedis(url string) (*Redis, error) {
 
 func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
 	// XADD appends the message to a stream
-	// Topic = Stream Name
+	// Type = Stream Name
 	// Values = Map of data
 	return r.client.XAdd(ctx, &redis.XAddArgs{
-		Stream: event.Topic,
+		Stream: event.Type,
 		Values: map[string]interface{}{
 			"id":      event.ID.String(),
 			"payload": event.Payload,

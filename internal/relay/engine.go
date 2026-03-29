@@ -68,7 +68,7 @@ func (e *Engine) process(ctx context.Context) error {
 		_, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
 			oteltrace.WithAttributes(
 				attribute.String("event_id", event.ID.String()),
-				attribute.String("topic", event.Topic),
+				attribute.String("type", event.Type),
 			))
 		// 2. Publish the event
 		if err := e.publisher.Publish(ctx, event); err != nil {
@@ -77,7 +77,7 @@ func (e *Engine) process(ctx context.Context) error {
 			childSpan.End() // End child
 			e.logger.Warn("publish failed",
 				zap.String("event_id", event.ID.String()),
-				zap.String("topic", event.Topic),
+				zap.String("type", event.Type),
 				zap.Error(err),
 			)
 			e.metrics.Failed.Add(ctx, 1)
@@ -96,7 +96,7 @@ func (e *Engine) process(ctx context.Context) error {
 		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil {
 			e.logger.Warn("mark as done failed",
 				zap.String("event_id", event.ID.String()),
-				zap.String("topic", event.Topic),
+				zap.String("type", event.Type),
 				zap.Error(err),
 			)
 		}

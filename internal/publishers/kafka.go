@@ -27,7 +27,7 @@ func NewKafka(brokers string) *Kafka {
 func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	return k.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte(event.ID.String()), // Use ID as partition key
-		Topic: event.Topic,
+		Topic: event.Type,
 		Value: event.Payload,
 	})
 }

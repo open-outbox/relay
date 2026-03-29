@@ -24,5 +24,6 @@ type Storage interface {
 type Stats struct {
 	Pending  int `json:"pending"`
 	Retrying int `json:"retrying"`
+	InFlight int `json:"retrying"`
 	Failed   int `json:"failed"`
 }

@@ -1,6 +1,6 @@
 CREATE TABLE outbox_events (
     id         UUID PRIMARY KEY,
-    topic      TEXT NOT NULL,
+    event_type      TEXT NOT NULL,
     payload    BYTEA NOT NULL,          -- Binary data (JWT, JSON, Protobuf)
     status     VARCHAR(20) NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()

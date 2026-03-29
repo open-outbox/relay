@@ -22,19 +22,13 @@ func main() {
 	defer stop()
 
 	cfg, err := config.Load()
-    if err != nil {
-        log.Fatalf("Failed to load config: %v", err)
-    }
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
-    log.Printf("Config Loaded: BatchSize=%d, Interval=%v", cfg.BatchSize, cfg.PollInterval)
+	log.Printf("Config Loaded: BatchSize=%d, Interval=%v", cfg.BatchSize, cfg.PollInterval)
 
 	log.Println("Relay starting... Press Ctrl+C to stop.")
-
-	// memDB := storage.NewMemory()
-    // // Seed 3 initial events
-    // memDB.Add(relay.Event{ID: uuid.New(), Topic: "test.1", Payload: []byte("First")})
-    // memDB.Add(relay.Event{ID: uuid.New(), Topic: "test.2", Payload: []byte("Second")})
-    // memDB.Add(relay.Event{ID: uuid.New(), Topic: "test.3", Payload: []byte("Third")})
 
 	// 2. Connect to Postgres
 	connStr := "postgres://postgres:postgres@localhost:5432/postgres"
@@ -45,12 +39,12 @@ func main() {
 	defer pool.Close()
 	dbStorage := storage.NewPostgres(pool)
 
-    // cliPub := publishers.NewStdout()
+	// cliPub := publishers.NewStdout()
 	// 3. Initialize NATS instead of Stdout
-    natsPub, err := publishers.NewNats(nats.DefaultURL) // "nats://localhost:4222"
-    if err != nil {
-        log.Fatalf("NATS error: %v", err)
-    }
+	natsPub, err := publishers.NewNats(nats.DefaultURL) // "nats://localhost:4222"
+	if err != nil {
+		log.Fatalf("NATS error: %v", err)
+	}
 	log.Println("Connected to nats...")
 	defer natsPub.Close()
 
@@ -67,7 +61,7 @@ func main() {
 			log.Printf("Engine stopped with unexpected error: %v", err)
 		}
 	}
-	
+
 	/// 7. Graceful Shutdown sequence
 	// Once we reach here, the engine has already stopped.
 	// Now we give the API server 5 seconds to finish any active requests.

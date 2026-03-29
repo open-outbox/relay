@@ -31,7 +31,7 @@ func (m *Memory) Fetch(ctx context.Context, batchSize int) ([]relay.Event, error
 
 	var results []relay.Event
 	for _, e := range m.events {
-		if e.Retries > 5 {
+		if e.Attempts > 5 {
 			continue
 		}
 		results = append(results, e)
@@ -59,7 +59,7 @@ func (m *Memory) MarkFailed(ctx context.Context, id string, reason string) error
 	defer m.mu.Unlock()
 	event, ok := m.events[id]
 	if ok {
-		event.Retries = event.Retries + 1
+		event.Attempts = event.Attempts + 1
 		event.LastError = reason
 		m.events[id] = event
 	}
@@ -73,11 +73,11 @@ func (m *Memory) GetStats(ctx context.Context) (relay.Stats, error) {
 
 	for _, event := range m.events {
 		switch {
-		case event.Retries == 0:
+		case event.Attempts == 0:
 			stats.Pending++
-		case event.Retries > 0 && event.Retries < 5:
+		case event.Attempts > 0 && event.Attempts < 5:
 			stats.Retrying++
-		case event.Retries >= 5:
+		case event.Attempts >= 5:
 			stats.Failed++
 		}
 	}
