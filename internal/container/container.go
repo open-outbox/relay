@@ -142,6 +142,9 @@ func BuildContainer(rootCtx context.Context) *dig.Container {
 			case "stdout":
 				return publishers.NewStdout(), nil
 
+			case "null":
+				return publishers.NewNull(), nil
+
 			default:
 				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 			}
