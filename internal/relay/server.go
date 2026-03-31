@@ -47,13 +47,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // Start starts the server. It does NOT block.
-func (s *Server) Start() {
-	go func() {
-		s.logger.Info("starting health api", zap.String("addr", s.server.Addr))
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.logger.Fatal("http server failed", zap.Error(err))
-		}
-	}()
+// TODO: Fix error handling
+func (s *Server) Start() error {
+	s.logger.Info("starting relay api", zap.String("addr", s.server.Addr))
+	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 // Stop gracefully shuts down the server.

@@ -14,6 +14,7 @@ import (
 	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // main initializes the application and starts the main execution loop.
@@ -26,25 +27,29 @@ func main() {
 	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) error {
 		defer func() { _ = logger.Sync() }()
 
-		logger.Info("Starting OpenOutbox Relay")
-		api.Start()
-		defer func() {
+		g, groupCtx := errgroup.WithContext(ctx)
+		g.Go(func() error {
+			return api.Start()
+		})
+		g.Go(func() error {
+			return engine.Start(groupCtx)
+		})
+
+		g.Go(func() error {
+			<-groupCtx.Done()
+			logger.Info("Shutdown signal received, closing API...")
+
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := api.Stop(shutdownCtx); err != nil {
-				logger.Error("API shutdown error", zap.Error(err))
-			}
-		}()
+			return api.Stop(shutdownCtx)
+		})
 
-		if err := engine.Start(ctx); err != nil && err != context.Canceled {
-			return err
-		}
-
-		logger.Info("Relay process exited gracefully")
-		return nil
+		logger.Info("OpenOutbox Relay is running...")
+		return g.Wait()
 	})
 
 	if err != nil {
 		log.Fatalf("Relay terminated with error: %v", err)
 	}
+	log.Println("Relay process exited gracefully")
 }

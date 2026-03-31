@@ -65,8 +65,8 @@ func (p *Postgres) MarkFailed(ctx context.Context, id string, reason string) err
 }
 
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
-    var stats relay.Stats
-    query := `
+	var stats relay.Stats
+	query := `
         SELECT 
             COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts = 0) as pending,
             COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts > 0) as retrying,
@@ -74,12 +74,12 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
             COUNT(*) FILTER (WHERE status = 'DEAD') as dead
         FROM outbox_events`
 
-    // Note: You'll need to update your relay.Stats struct to include InFlight and Dead!
-    err := p.pool.QueryRow(ctx, query).Scan(
-        &stats.Pending, 
-        &stats.Retrying, 
-        &stats.InFlight, 
-        &stats.Failed,
-    )
-    return stats, err
+	// Note: You'll need to update your relay.Stats struct to include InFlight and Dead!
+	err := p.pool.QueryRow(ctx, query).Scan(
+		&stats.Pending,
+		&stats.Retrying,
+		&stats.InFlight,
+		&stats.Failed,
+	)
+	return stats, err
 }
