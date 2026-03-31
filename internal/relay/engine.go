@@ -83,8 +83,12 @@ func (e *Engine) process(ctx context.Context) error {
 				attribute.String("event_id", event.ID.String()),
 				attribute.String("type", event.Type),
 			))
-		// 2. Publish the event
-		if err := e.publisher.Publish(ctx, event); err != nil {
+
+		res, err := e.publisher.Publish(ctx, event)
+		//Temporary handling of the result
+		e.logger.Info("Publish result", zap.String("Status", string(res.Status)))
+
+		if err != nil {
 			childSpan.RecordError(err)
 			childSpan.SetStatus(codes.Error, "publish failed")
 			childSpan.End() // End child
