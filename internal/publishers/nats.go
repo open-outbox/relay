@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/open-outbox/relay/internal/relay"
@@ -28,18 +29,30 @@ func NewNats(url string) (*Nats, error) {
 // Publish sends the event payload to a NATS subject.
 func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
 	err := n.conn.Publish(event.Type, event.Payload)
-	if err == nil {
-		err = n.conn.FlushWithContext(ctx)
-	}
 
 	if err != nil {
 		return relay.PublishResult{}, &relay.PublishError{
-			Err:         fmt.Errorf("nats publish failed: %w", err),
+			Err:         fmt.Errorf("nats flush failed: %w", err),
 			IsRetryable: isNatsErrorRetryable(err),
-			Code:        "NATS_PUBLISH_ERROR",
+			Code:        "NATS_FLUSH_ERROR",
 		}
 	}
 
+	flushCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		// If not, we MUST create one, otherwise NATS returns the error you're seeing.
+		var cancel context.CancelFunc
+		flushCtx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
+
+	if err := n.conn.FlushWithContext(flushCtx); err != nil {
+		return relay.PublishResult{}, &relay.PublishError{
+			Err:         fmt.Errorf("nats flush failed: %w", err),
+			IsRetryable: isNatsErrorRetryable(err),
+			Code:        "NATS_FLUSH_ERROR",
+		}
+	}
 	return relay.PublishResult{
 		Status:     relay.StatusSuccess,
 		ProviderID: event.ID.String(),
