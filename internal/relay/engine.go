@@ -86,7 +86,7 @@ func (e *Engine) process(ctx context.Context) error {
 
 		res, err := e.publisher.Publish(ctx, event)
 		//Temporary handling of the result
-		e.logger.Info("Publish result", zap.String("Status", string(res.Status)))
+		e.logger.Info("Publish result", zap.String("Status", string(rune(res.Status))))
 
 		if err != nil {
 			childSpan.RecordError(err)

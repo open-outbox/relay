@@ -60,6 +60,10 @@ func isKafkaErrorRetryable(err error) bool {
 		return false
 	}
 
+	if isContextError(err) {
+		return true
+	}
+
 	var writeErrs kafka.WriteErrors
 	if errors.As(err, &writeErrs) {
 		for _, e := range writeErrs {
@@ -68,10 +72,6 @@ func isKafkaErrorRetryable(err error) bool {
 			}
 		}
 		return false
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return true
 	}
 
 	var tempErr interface{ Temporary() bool }
