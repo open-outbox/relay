@@ -1,4 +1,4 @@
-.PHONY: run producer test clean
+.PHONY: run producer test clean fmt lint up down setup
 
 # Start the infrastructure
 up:
@@ -13,6 +13,20 @@ run:
 # Run the Producer to generate traffic
 producer:
 	go run cmd/producer/main.go
+
+# Format code and tidy modules
+fmt:
+	goimports -w .
+	go mod tidy
+
+# Run linters
+lint: fmt
+	golangci-lint run ./...
+
+# Install development dependencies
+setup:
+	go install golang.org/x/tools/cmd/goimports@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 # Stop everything
 down:
