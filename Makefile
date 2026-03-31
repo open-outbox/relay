@@ -17,6 +17,7 @@ producer:
 # Format code and tidy modules
 fmt:
 	goimports -w .
+	golines . -w --max-len=100
 	go mod tidy
 
 # Run linters

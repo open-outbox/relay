@@ -2,12 +2,17 @@ version: "2"
 
 run:
   timeout: 5m
+  modules-download-mode: readonly
 
 linters:
   enable:
+    - lll
     - govet
     - staticcheck
     - revive
     - errcheck
     - ineffassign
     - unused
+  settings:
+    lll:
+      line-length: 100
