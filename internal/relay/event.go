@@ -15,6 +15,10 @@ const (
 	StatusDead       Status = "DEAD"       // Failed too many times
 )
 
+func (s Status) IsTerminal() bool {
+	return s == StatusDelivered || s == StatusDead
+}
+
 type Event struct {
 	ID           uuid.UUID      `db:"event_id"      json:"id"`
 	Type         string         `db:"event_type"    json:"type"`
@@ -23,7 +27,7 @@ type Event struct {
 	Headers      map[string]any `db:"headers"       json:"headers"`
 
 	// State
-	Status    string `db:"status"     json:"status"` // Treat as Read-Only in Go
+	Status    Status `db:"status"     json:"status"`
 	Attempts  int    `db:"attempts"   json:"attempts"`
 	LastError string `db:"last_error" json:"last_error"`
 

@@ -91,7 +91,16 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			metrics *relay.Metrics,
 			traceProvider trace.TracerProvider,
 			meterProvider metric.MeterProvider) *relay.Engine {
-			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, traceProvider, meterProvider)
+			return relay.NewEngine(
+				s,
+				p,
+				cfg.PollInterval,
+				cfg.BatchSize,
+				logger,
+				metrics,
+				traceProvider,
+				meterProvider,
+			)
 		},
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)
