@@ -26,8 +26,8 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		config.Load,
 		relay.NewMetrics,
 		telemetry.NewOTelProviders,
-		func(p *telemetry.OTelProviders) trace.Tracer { return p.Tracer },
-		func(p *telemetry.OTelProviders) metric.Meter { return p.Meter },
+		func(p *telemetry.OTelProviders) trace.TracerProvider { return p.TraceProvider },
+		func(p *telemetry.OTelProviders) metric.MeterProvider { return p.MeterProvider },
 		func(cfg *config.Config) (*zap.Logger, error) {
 			var logger *zap.Logger
 			var err error
@@ -84,8 +84,14 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 			}
 		},
-		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, metrics *relay.Metrics, tracer trace.Tracer, meter metric.Meter) *relay.Engine {
-			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, tracer, meter)
+		func(s relay.Storage,
+			p relay.Publisher,
+			cfg *config.Config,
+			logger *zap.Logger,
+			metrics *relay.Metrics,
+			traceProvider trace.TracerProvider,
+			meterProvider metric.MeterProvider) *relay.Engine {
+			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, traceProvider, meterProvider)
 		},
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)

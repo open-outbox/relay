@@ -15,9 +15,10 @@ type Metrics struct {
 	PublisherLatency metric.Float64Histogram
 }
 
-func NewMetrics(meter metric.Meter) (*Metrics, error) { // Add error return
+func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add error return
 	var err error
 	m := &Metrics{}
+	meter := meterProvider.Meter(instrumentationName)
 
 	// We must handle the error for every instrument
 	m.Claimed, err = meter.Int64Counter(

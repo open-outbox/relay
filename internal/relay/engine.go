@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const instrumentationName = "github.com/open-outbox/relay/engine"
+
 // Engine coordinates the movement of events from Storage to Publisher.
 type Engine struct {
 	storage   Storage
@@ -32,8 +34,8 @@ func NewEngine(
 	batchSize int,
 	logger *zap.Logger,
 	metrics *Metrics,
-	tracer trace.Tracer,
-	meter metric.Meter,
+	traceProvider trace.TracerProvider,
+	meterProvider metric.MeterProvider,
 ) *Engine {
 
 	return &Engine{
@@ -43,8 +45,8 @@ func NewEngine(
 		batchSize: batchSize,
 		logger:    logger.With(zap.String("module", "engine")),
 		metrics:   metrics,
-		tracer:    tracer,
-		meter:     meter,
+		tracer:    traceProvider.Tracer(instrumentationName),
+		meter:     meterProvider.Meter(instrumentationName),
 	}
 }
 
