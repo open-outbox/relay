@@ -10,19 +10,17 @@ type Metrics struct {
 	Failed               metric.Int64Counter
 	PendingGauge         metric.Int64Gauge
 	OldestPendingSeconds metric.Int64Gauge
-	// Errors metric.Int64Counter
-	Latency          metric.Float64Histogram
-	PublisherLatency metric.Float64Histogram
+	Latency              metric.Float64Histogram
+	PublisherLatency     metric.Float64Histogram
 }
 
-func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add error return
+func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	var err error
 	m := &Metrics{}
 	meter := meterProvider.Meter(instrumentationName)
 
-	// We must handle the error for every instrument
 	m.Claimed, err = meter.Int64Counter(
-		"openoutbox_claimed_total",
+		"openoutbox.claimed.total",
 		metric.WithDescription("Total claimed events."),
 	)
 	if err != nil {
@@ -30,7 +28,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add e
 	}
 
 	m.Delivered, err = meter.Int64Counter(
-		"openoutbox_delivered_total",
+		"openoutbox.delivered.total",
 		metric.WithDescription("Total delivered events."),
 	)
 	if err != nil {
@@ -38,16 +36,15 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add e
 	}
 
 	m.Failed, err = meter.Int64Counter(
-		"openoutbox_failed_total",
+		"openoutbox.failed.total",
 		metric.WithDescription("Total failed deliveries."),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Note: In OTEL, Gauge is "Int64Gauge" (Sync) or "Int64ObservableGauge" (Async)
 	m.PendingGauge, err = meter.Int64Gauge(
-		"openoutbox_pending_gauge",
+		"openoutbox.pending.gauge",
 		metric.WithDescription("Current count of pending events."),
 	)
 	if err != nil {
@@ -55,7 +52,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add e
 	}
 
 	m.OldestPendingSeconds, err = meter.Int64Gauge(
-		"openoutbox_oldest_pending_seconds_gauge",
+		"openoutbox.oldest_pending_seconds.gauge",
 		metric.WithDescription("Age (seconds) of oldest pending event."),
 	)
 	if err != nil {
@@ -63,7 +60,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add e
 	}
 
 	m.Latency, err = meter.Float64Histogram(
-		"openoutbox_latency_histogram",
+		"openoutbox.latency.histogram",
 		metric.WithDescription("Time taken to process a single batch."),
 	)
 	if err != nil {
@@ -71,12 +68,12 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) { // Add e
 	}
 
 	m.PublisherLatency, err = meter.Float64Histogram(
-		"openoutbox_publisher_latency_histogram",
+		"openoutbox.publisher_latency.histogram",
 		metric.WithDescription("Time taken to publish events."),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return m, nil // Don't forget to return!
+	return m, nil
 }
