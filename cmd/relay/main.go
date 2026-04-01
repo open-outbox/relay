@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,12 +20,22 @@ import (
 
 // main initializes the application and starts the main execution loop.
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("Relay terminated with error: %v", err)
+	}
+	log.Println("Relay process exited gracefully")
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	c := container.BuildContainer(ctx)
+	c, err := container.BuildContainer(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to build container: %w", err)
+	}
 
-	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) error {
+	return c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) error {
 		defer func() { _ = logger.Sync() }()
 
 		g, groupCtx := errgroup.WithContext(ctx)
@@ -47,9 +58,4 @@ func main() {
 		logger.Info("OpenOutbox Relay is running...")
 		return g.Wait()
 	})
-
-	if err != nil {
-		log.Fatalf("Relay terminated with error: %v", err)
-	}
-	log.Println("Relay process exited gracefully")
 }

@@ -3,7 +3,6 @@ package container
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
@@ -24,7 +23,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func BuildContainer(rootCtx context.Context) *dig.Container {
+func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 	c := dig.New()
 
 	dependencies := []interface{}{
@@ -36,10 +35,6 @@ func BuildContainer(rootCtx context.Context) *dig.Container {
 		func(cfg *config.Config) (*zap.Logger, error) {
 			var logger *zap.Logger
 			var err error
-
-			// Switch based on environment logic if you want
-			// Development: Pretty-printed, colorized
-			// Production: Mini-JSON, high performance
 			if cfg.Environment == "production" {
 				logger, err = zap.NewProduction()
 			} else {
@@ -162,9 +157,10 @@ func BuildContainer(rootCtx context.Context) *dig.Container {
 
 	for _, dependency := range dependencies {
 		if err := c.Provide(dependency); err != nil {
-			log.Fatalf("error in providing dependency: %v\n", err)
+			return nil, fmt.Errorf("failed to provide %T: %w", dependency, err)
 		}
 	}
 
-	return c
+	return c, nil
+
 }

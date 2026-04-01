@@ -7,6 +7,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Environment string
+
+const (
+	Development Environment = "development"
+	Production  Environment = "production"
+)
+
 type Config struct {
 	// Infrastructure Swtich
 	StorageType   string `mapstructure:"STORAGE_TYPE"`   // "postgres", "mysql"
@@ -20,24 +27,26 @@ type Config struct {
 	PollInterval time.Duration `mapstructure:"POLL_INTERVAL"`
 	BatchSize    int           `mapstructure:"BATCH_SIZE"`
 	ServerPort   string        `mapstructure:"SERVER_PORT"`
-	Environment  string        `mapstructure:"ENVIRONMENT"`
+	Environment  Environment   `mapstructure:"ENVIRONMENT"`
 }
 
 func Load() (*Config, error) {
 	v := viper.New()
 
 	// 1. Set Defaults
+	v.SetDefault("STORAGE_TYPE", "memory")
+	v.SetDefault("PUBLISHER_TYPE", "stdout")
 	v.SetDefault("POLL_INTERVAL", "500ms")
-	v.SetDefault("BATCH_SIZE", 10)
+	v.SetDefault("BATCH_SIZE", 100)
 	v.SetDefault("SERVER_PORT", ":8080")
+	v.SetDefault("ENVIRONMENT", Production)
 
 	// 2. Read from .env or config.yaml (Optional)
-	v.SetConfigName("config") // Name of the file (without extension)
-	v.AddConfigPath(".")      // Search in the current directory
-	v.AutomaticEnv()          // IMPORTANT: Read from ENV variables automatically
+	v.SetConfigName("config")
+	v.AddConfigPath(".")
+	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Try to read the file, but don't crash if it's missing (Env vars might be enough)
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, err
