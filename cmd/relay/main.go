@@ -26,6 +26,7 @@ func main() {
 	log.Println("Relay process exited gracefully")
 }
 
+// Runs the relay engine and api servers
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
