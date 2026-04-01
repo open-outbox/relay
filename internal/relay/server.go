@@ -57,18 +57,27 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // Start starts the server. It does NOT block.
-// TODO: Fix error handling
-func (s *Server) Start() error {
-	s.logger.Info("starting relay api", zap.String("addr", s.server.Addr))
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+func (s *Server) Start(ctx context.Context) (err error) {
+
+	srvErr := make(chan error, 1)
+	go func() {
+		s.logger.Info("starting relay api", zap.String("addr", s.server.Addr))
+		srvErr <- s.server.ListenAndServe()
+	}()
+
+	// Wait for interruption.
+	select {
+	case err = <-srvErr:
+		// Error when starting HTTP server.
 		return err
+	case <-ctx.Done():
+		s.logger.Info("Shut down signal received, shudding down api server...")
 	}
-	return nil
 
-}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = s.server.Shutdown(shutdownCtx)
+	s.logger.Info("Api server stopped")
+	return err
 
-// Stop gracefully shuts down the server.
-func (s *Server) Stop(ctx context.Context) error {
-	s.logger.Info("Shutting down Health API...")
-	return s.server.Shutdown(ctx)
 }

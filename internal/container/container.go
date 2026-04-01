@@ -151,8 +151,8 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		},
 
 		// Provide API Server
-		func(s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
-			return relay.NewServer(s, cfg.ServerPort, logger)
+		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
+			return relay.NewServer(ctx, s, cfg.ServerPort, logger)
 		}}
 
 	for _, dependency := range dependencies {
