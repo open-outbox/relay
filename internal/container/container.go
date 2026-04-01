@@ -9,16 +9,9 @@ import (
 	"github.com/open-outbox/relay/internal/publishers"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
-	prometheus_client "github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"github.com/open-outbox/relay/internal/telemetry"
 	"go.opentelemetry.io/otel/metric"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
-	oteltrace "go.opentelemetry.io/otel/trace" // Alias the API
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -32,6 +25,9 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		},
 		config.Load,
 		relay.NewMetrics,
+		telemetry.NewOTelProviders,
+		func(p *telemetry.OTelProviders) trace.Tracer { return p.Tracer },
+		func(p *telemetry.OTelProviders) metric.Meter { return p.Meter },
 		func(cfg *config.Config) (*zap.Logger, error) {
 			var logger *zap.Logger
 			var err error
@@ -46,59 +42,6 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			}
 			return logger, nil
 		},
-
-		// Inside BuildContainer...
-		func() (oteltrace.Tracer, error) {
-			// 1. Create an exporter (sending to stdout for now)
-			exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
-			if err != nil {
-				return nil, err
-			}
-
-			// 2. Define the resource (service name)
-			res, _ := resource.Merge(
-				resource.Default(),
-				resource.NewWithAttributes(
-					semconv.SchemaURL,
-					semconv.ServiceNameKey.String("outbox-relay"),
-				),
-			)
-
-			// 3. Create the Provider
-			tp := trace.NewTracerProvider(
-				trace.WithBatcher(exporter),
-				trace.WithResource(res),
-			)
-
-			// Set global provider so libraries can use it
-			otel.SetTracerProvider(tp)
-
-			return tp.Tracer("outbox-relay-engine"), nil
-		},
-
-		func() (metric.Meter, error) {
-			// 1. Create the Prometheus exporter
-			// 1. Tell OTEL to use the Global Prometheus Registerer
-			// This is the "magic link" that connects OTEL to promhttp.Handler()
-			exporter, err := prometheus.New(
-				prometheus.WithRegisterer(prometheus_client.DefaultRegisterer),
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			// 2. Setup the Provider
-			provider := sdkmetric.NewMeterProvider(
-				sdkmetric.WithReader(exporter),
-			)
-
-			// 3. Set this as the GLOBAL Meter Provider (Optional but recommended)
-			otel.SetMeterProvider(provider)
-
-			return provider.Meter("open-outbox-relay"), nil
-		},
-
-		// Storage Provider
 		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
 
 			switch cfg.StorageType {
@@ -120,15 +63,12 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)
 			}
 		},
-
-		// Publisher Provider
 		func(cfg *config.Config) (relay.Publisher, error) {
 			switch cfg.PublisherType {
 			case "nats":
 				return publishers.NewNats(cfg.PublisherURL)
 
 			case "kafka":
-				// return publishers.NewKafka(cfg.KafkaBrokers), nil (To be implemented)
 				return publishers.NewKafka(cfg.PublisherURL), nil
 
 			case "redis":
@@ -144,16 +84,13 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 			}
 		},
-
-		// Provide Engine
-		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, metrics *relay.Metrics, tracer oteltrace.Tracer) *relay.Engine {
-			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, tracer)
+		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, metrics *relay.Metrics, tracer trace.Tracer, meter metric.Meter) *relay.Engine {
+			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, tracer, meter)
 		},
-
-		// Provide API Server
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)
-		}}
+		},
+	}
 
 	for _, dependency := range dependencies {
 		if err := c.Provide(dependency); err != nil {

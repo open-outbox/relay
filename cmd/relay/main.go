@@ -10,9 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
+	"github.com/open-outbox/relay/internal/telemetry"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -35,17 +37,28 @@ func run() error {
 		return fmt.Errorf("Failed to build container: %w", err)
 	}
 
-	return c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) error {
-		defer func() { _ = logger.Sync() }()
+	return c.Invoke(
+		func(engine *relay.Engine, api *relay.Server, logger *zap.Logger, tp *telemetry.OTelProviders) error {
+			defer func() { _ = logger.Sync() }()
 
-		g, groupCtx := errgroup.WithContext(ctx)
-		g.Go(func() error {
-			return api.Start(groupCtx)
-		})
-		g.Go(func() error {
-			return engine.Start(groupCtx)
-		})
-		logger.Info("OpenOutbox Relay is running...")
-		return g.Wait()
-	})
+			defer func() {
+				logger.Info("Flushing telemetry data...")
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := tp.Shutdown(shutdownCtx); err != nil {
+					logger.Error("OTel shutdown failed", zap.Error(err))
+				}
+			}()
+
+			g, groupCtx := errgroup.WithContext(ctx)
+			g.Go(func() error {
+				return api.Start(groupCtx)
+			})
+			g.Go(func() error {
+				return engine.Start(groupCtx)
+			})
+			logger.Info("OpenOutbox Relay is running...")
+			return g.Wait()
+		},
+	)
 }

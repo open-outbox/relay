@@ -7,7 +7,8 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	oteltrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -19,28 +20,31 @@ type Engine struct {
 	batchSize int
 	logger    *zap.Logger
 	metrics   *Metrics
-	tracer    oteltrace.Tracer
+	tracer    trace.Tracer
+	meter     metric.Meter
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
 func NewEngine(
-	s Storage,
-	p Publisher,
-	i time.Duration,
-	b int,
-	l *zap.Logger,
-	m *Metrics,
-	t oteltrace.Tracer,
+	storage Storage,
+	publisher Publisher,
+	interval time.Duration,
+	batchSize int,
+	logger *zap.Logger,
+	metrics *Metrics,
+	tracer trace.Tracer,
+	meter metric.Meter,
 ) *Engine {
 
 	return &Engine{
-		storage:   s,
-		publisher: p,
-		interval:  i,
-		batchSize: b,
-		logger:    l.With(zap.String("module", "engine")),
-		metrics:   m,
-		tracer:    t,
+		storage:   storage,
+		publisher: publisher,
+		interval:  interval,
+		batchSize: batchSize,
+		logger:    logger.With(zap.String("module", "engine")),
+		metrics:   metrics,
+		tracer:    tracer,
+		meter:     meter,
 	}
 }
 
@@ -87,7 +91,7 @@ func (e *Engine) process(ctx context.Context) error {
 		}
 
 		_, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
-			oteltrace.WithAttributes(
+			trace.WithAttributes(
 				attribute.String("event_id", event.ID.String()),
 				attribute.String("type", event.Type),
 			))
