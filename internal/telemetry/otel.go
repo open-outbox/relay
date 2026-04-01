@@ -3,11 +3,9 @@ package telemetry
 import (
 	"context"
 	"errors"
-	"time"
 
+	"go.opentelemetry.io/contrib/exporters/autoexport"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -90,28 +88,32 @@ func newResource() (*resource.Resource, error) {
 }
 
 func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
-	traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	ctx := context.Background()
+
+	traceExporter, err := autoexport.NewSpanExporter(ctx)
+
 	if err != nil {
 		return nil, err
 	}
 
 	tp := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter, trace.WithBatchTimeout(time.Second)),
+		trace.WithBatcher(traceExporter),
 		trace.WithResource(res),
 	)
 	return tp, nil
 }
 
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
-	metricExporter, err := stdoutmetric.New(stdoutmetric.WithPrettyPrint())
+	ctx := context.Background()
+
+	metricReader, err := autoexport.NewMetricReader(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	mp := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(metricExporter,
-			metric.WithInterval(3*time.Second))),
-	)
+		metric.WithReader(metricReader))
+
 	return mp, nil
 }
