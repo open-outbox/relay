@@ -3,11 +3,9 @@ package telemetry
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/metric"
@@ -15,6 +13,7 @@ import (
 	sdkmeter "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0" // Ensure this is imported
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -32,7 +31,6 @@ const serviceName = "openoutbox-relay"
 func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 	var shutdownFuncs []func(context.Context) error
 
-	// Clean shutdown helper
 	shutdown := func(ctx context.Context) error {
 		var err error
 		for _, fn := range shutdownFuncs {
@@ -42,11 +40,16 @@ func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 		return err
 	}
 
-	// Set up global propagator (TraceContext + Baggage)
 	otel.SetTextMapPropagator(newPropagator())
 
+	// Initialize Shared Resource
+	res, err := newResource()
+	if err != nil {
+		return nil, errors.Join(err, shutdown(ctx))
+	}
+
 	// 1. Initialize Tracer Provider
-	tp, err := newTracerProvider()
+	tp, err := newTracerProvider(res)
 	if err != nil {
 		return nil, errors.Join(err, shutdown(ctx))
 	}
@@ -54,7 +57,7 @@ func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 	otel.SetTracerProvider(tp)
 
 	// 2. Initialize Meter Provider
-	mp, err := newMeterProvider()
+	mp, err := newMeterProvider(res)
 	if err != nil {
 		return nil, errors.Join(err, shutdown(ctx))
 	}
@@ -76,24 +79,22 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newResource() (*resource.Resource, error) {
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			"",
-			semconv.ServiceNameKey.String("openoutbox-relay"),
-			semconv.ServiceVersionKey.String("1.0.0"),
-		),
+	// Using an empty string for the SchemaURL in NewWithAttributes
+	// is the key to avoiding the "Conflicting Schema URL" error.
+	extraRes := resource.NewWithAttributes(
+		"",
+		semconv.ServiceNameKey.String(serviceName),
+		semconv.ServiceVersionKey.String("1.0.0"),
 	)
 
-	return res, err
+	return resource.Merge(
+		resource.Default(),
+		extraRes,
+	)
 }
 
-func newTracerProvider() (*sdktrace.TracerProvider, error) {
+func newTracerProvider(res *resource.Resource) (*sdktrace.TracerProvider, error) {
 	traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
-	if err != nil {
-		return nil, err
-	}
-	res, err := newResource()
 	if err != nil {
 		return nil, err
 	}
@@ -105,16 +106,8 @@ func newTracerProvider() (*sdktrace.TracerProvider, error) {
 	return tp, nil
 }
 
-func newMeterProvider() (*sdkmeter.MeterProvider, error) {
+func newMeterProvider(res *resource.Resource) (*sdkmeter.MeterProvider, error) {
 	metricExporter, err := stdoutmetric.New(stdoutmetric.WithPrettyPrint())
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := newResource()
-	if err != nil {
-		return nil, err
-	}
 	if err != nil {
 		return nil, err
 	}
