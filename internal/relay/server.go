@@ -44,14 +44,14 @@ func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) 
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	// We use the request's context for the DB call
-	stats, err := s.storage.GetStats(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// stats, err := s.storage.GetStats(r.Context())
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
 	w.Header().Set("Content-Type", "application/json")
 	// Replace the old line with this:
-	if err := json.NewEncoder(w).Encode(stats); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{}); err != nil {
 		s.logger.Error("failed to encode stats", zap.Error(err))
 	}
 }

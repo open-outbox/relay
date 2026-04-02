@@ -40,21 +40,21 @@ func (p *Postgres) ClaimBatch(
             ORDER BY created_at ASC
             LIMIT $4
             FOR UPDATE SKIP LOCKED
-        )
-        UPDATE outbox_events
+        ) 
+        UPDATE outbox_events as e
         SET 
-            status = $2,     -- Move to 'DELIVERING'
-            locked_by = $5,  -- Relay ID
+            status = $2,
+            locked_by = $5,  
             locked_at = NOW(),
             updated_at = NOW()
-        FROM target_events
-        WHERE outbox_events.event_id = target_events.event_id
+        FROM target_events as t
+        WHERE e.event_id = t.event_id
         RETURNING 
-            event_id, 
-            event_type, 
-            payload, 
-            partition_key,
-            attempts;
+            e.event_id, 
+            e.event_type, 
+            e.payload, 
+            e.partition_key,
+            e.attempts;
     `
 
 	rows, err := p.pool.Query(ctx, query,
@@ -105,7 +105,7 @@ func (p *Postgres) MarkDeliveredBatch(
         UPDATE outbox_events
         SET 
             status = $1,
-			delivered_at = NOW()
+			delivered_at = NOW(),
             locked_by = NULL,
             locked_at = NULL,
             updated_at = NOW()

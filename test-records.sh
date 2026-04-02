@@ -2,7 +2,7 @@ docker exec -it $(docker ps -qf "name=postgres") psql -U postgres -d postgres -c
 -- 1. Wipe the slate clean
 DROP TABLE IF EXISTS outbox_events CASCADE;
 
--- 2. Rebuild with the 'Pro-Grade' Spec
+-- Re-running the full CREATE for your reference:
 CREATE TABLE outbox_events (
     event_id      UUID PRIMARY KEY,
     event_type    TEXT NOT NULL,
@@ -15,6 +15,7 @@ CREATE TABLE outbox_events (
     available_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     locked_by     TEXT,
     locked_at     TIMESTAMPTZ,
+    delivered_at  TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
@@ -30,4 +31,8 @@ WHERE status = 'PENDING';
 CREATE INDEX idx_outbox_stuck_leases 
 ON outbox_events (locked_at) 
 WHERE status = 'DELIVERING';
+
+CREATE INDEX idx_outbox_archive_lookup 
+ON outbox_events (delivered_at) 
+WHERE status = 'DELIVERED';
 "
