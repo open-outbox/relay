@@ -10,7 +10,12 @@ import (
 type Storage interface {
 	// ClaimBatch captures a set of events and locks them to this relayID.
 	// Returns the events to be processed.
-	ClaimBatch(ctx context.Context, relayID string, batchSize int, leaseMinutes int) ([]Event, error)
+	ClaimBatch(
+		ctx context.Context,
+		relayID string,
+		batchSize int,
+		leaseMinutes int,
+	) ([]Event, error)
 
 	// MarkDeliveredBatch moves a set of IDs to the final 'DELIVERED' state.
 	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID, relayID string) error

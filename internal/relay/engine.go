@@ -145,17 +145,21 @@ func (e *Engine) process(ctx context.Context) error {
 		e.metrics.Latency.Record(ctx, time.Since(start).Seconds())
 	}
 
-	// if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil &&
-	// 	err != context.Canceled {
-	// 	e.logger.Warn("mark as done failed",
-	// 		zap.String("event_id", event.ID.String()),
-	// 		zap.String("type", event.Type),
-	// 		zap.Error(err),
-	// 	)
-	// }
+	if len(successEvents) > 0 {
+		if err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId); err != nil &&
+			err != context.Canceled {
+			e.logger.Error("failed to mark success batch", zap.Error(err))
+			return err
+		}
+	}
 
-	// Instead of just 'continue', we tell the DB it failed
-	// _ = e.storage.MarkFailed(ctx, event.ID.String(), err.Error())
+	if len(failedEvents) > 0 {
+		if err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId); err != nil &&
+			err != context.Canceled {
+			e.logger.Error("failed to mark failure batch", zap.Error(err))
+			return err
+		}
+	}
 
 	return nil
 }
