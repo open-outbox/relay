@@ -52,9 +52,6 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				}
 				return storage.NewPostgres(pool), nil
 
-			// case "memory":
-			// 	return storage.NewMemory(), nil
-
 			case "mysql":
 				// return storage.NewMySQL(cfg.DatabaseURL), nil (To be implemented)
 				return nil, fmt.Errorf("mysql storage not yet implemented")
