@@ -101,12 +101,20 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			tel telemetry.Telemetry,
 		) *relay.Engine {
 
+			retruPolicy := relay.ExponentialBackoff{
+				MaxAttempts: cfg.RetryMaxAttempts,
+				BaseDelay:   cfg.RetryBaseDelay,
+				MaxDelay:    cfg.RetryMaxDelay,
+				Jitter:      cfg.RetryJitter,
+			}
+
 			params := relay.EngineParams{
 				RelayID:       cfg.RELAY_ID,
 				Interval:      cfg.PollInterval,
 				BatchSize:     cfg.BatchSize,
 				LeaseTimeout:  cfg.LeaseTimeout,
 				ReapBatchSize: cfg.ReapBatchSize,
+				RetryPolicy:   retruPolicy,
 			}
 
 			return relay.NewEngine(s, p, params, tel)

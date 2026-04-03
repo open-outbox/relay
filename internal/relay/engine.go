@@ -3,7 +3,6 @@ package relay
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"time"
 
@@ -44,6 +43,7 @@ type EngineParams struct {
 	BatchSize     int
 	LeaseTimeout  time.Duration
 	ReapBatchSize int
+	RetryPolicy   RetryPolicy
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
@@ -67,15 +67,11 @@ func NewEngine(
 		batchSize:     params.BatchSize,
 		leaseTimeout:  params.LeaseTimeout,
 		reapBatchSize: params.ReapBatchSize,
+		policy:        params.RetryPolicy,
 		logger:        tel.ScopedLogger("engine"),
 		metrics:       tel.Metrics,
 		tracer:        tel.Tracer(instrumentationName),
 		meter:         tel.Meter(instrumentationName),
-		policy: RetryPolicy{
-			MaxAttempts: 10,
-			BaseDelay:   1 * time.Second,
-			MaxDelay:    24 * time.Hour,
-		},
 	}
 }
 
@@ -334,30 +330,6 @@ func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 
 	e.metrics.PendingGauge.Record(ctx, stats.PendingCount)
 	e.metrics.OldestPendingSeconds.Record(ctx, stats.OldestAgeSec)
-}
-
-type RetryPolicy struct {
-	MaxAttempts int
-	BaseDelay   time.Duration
-	MaxDelay    time.Duration
-}
-
-func (p RetryPolicy) NextBackoff(attempts int) (time.Duration, bool) {
-	if attempts >= p.MaxAttempts {
-		return 0, false
-	}
-
-	// Exponential math: 2^(attempts-1)
-	delay := p.BaseDelay * time.Duration(1<<(uint(attempts-1)))
-
-	if delay > p.MaxDelay {
-		delay = p.MaxDelay
-	}
-
-	//add a 10% random variation to prevent Thundering Herd
-	jitter := time.Duration(rand.Int63n(int64(delay / 10)))
-
-	return delay + jitter, true
 }
 
 func generateRelayID() string {

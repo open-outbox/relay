@@ -31,6 +31,12 @@ type Config struct {
 	ServerPort    string        `mapstructure:"SERVER_PORT"`
 	Environment   Environment   `mapstructure:"ENVIRONMENT"`
 	RELAY_ID      string        `mapstructure:"RELAY_ID"`
+
+	// Retry Tuning
+	RetryMaxAttempts int           `mapstructure:"RETRY_MAX_ATTEMPTS"`
+	RetryBaseDelay   time.Duration `mapstructure:"RETRY_BASE_DELAY"`
+	RetryMaxDelay    time.Duration `mapstructure:"RETRY_MAX_DELAY"`
+	RetryJitter      float64       `mapstructure:"RETRY_JITTER"`
 }
 
 func Load() (*Config, error) {
@@ -46,7 +52,13 @@ func Load() (*Config, error) {
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
 
-	// 2. Read from .env or config.yaml (Optional)
+	// Retry Defaults
+	v.SetDefault("RETRY_MAX_ATTEMPTS", 10)
+	v.SetDefault("RETRY_BASE_DELAY", "1s")
+	v.SetDefault("RETRY_MAX_DELAY", "24h")
+	v.SetDefault("RETRY_JITTER", 0.15)
+
+	// Read from .env or config.yaml (Optional)
 	v.SetConfigName("config")
 	v.AddConfigPath(".")
 	v.AutomaticEnv()
@@ -58,14 +70,14 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// 4. Try to read .env (The local overrides)
+	// Try to read .env (The local overrides)
 	v.SetConfigFile(".env")
 	v.SetConfigType("env")
 	if err := v.MergeInConfig(); err != nil {
 		println("Failed to read configs from .env")
 	}
 
-	// 3. Unmarshal into our struct
+	// Unmarshal into our struct
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
