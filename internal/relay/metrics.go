@@ -25,7 +25,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	var err error
 
 	m.EventsTotal, err = meter.Int64Counter(
-		"relay.events.total",
+		"openoutbox.events.total",
 		metric.WithDescription("Total number of events processed by the relay."),
 	)
 	if err != nil {
@@ -33,7 +33,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	}
 
 	m.EndToEndLatency, err = meter.Float64Histogram(
-		"relay.events.e2e_latency",
+		"openoutbox.events.e2e_latency",
 		metric.WithDescription("Time from event creation in DB to successful publication (seconds)."),
 	)
 	if err != nil {
@@ -41,7 +41,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	}
 
 	m.StorageLatency, err = meter.Float64Histogram(
-		"relay.storage.latency",
+		"openoutbox.storage.latency",
 		metric.WithDescription("Latency of database operations (seconds)."),
 	)
 	if err != nil {
@@ -49,7 +49,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	}
 
 	m.PublisherLatency, err = meter.Float64Histogram(
-		"relay.publisher.latency",
+		"openoutbox.publisher.latency",
 		metric.WithDescription("Latency of message broker publication (seconds)."),
 	)
 	if err != nil {
@@ -57,7 +57,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	}
 
 	m.PendingGauge, err = meter.Int64Gauge(
-		"relay.backlog.pending_count",
+		"openoutbox.backlog.pending_count",
 		metric.WithDescription("Current count of pending events in the outbox table."),
 	)
 	if err != nil {
@@ -65,7 +65,7 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	}
 
 	m.OldestPendingSeconds, err = meter.Int64Gauge(
-		"relay.backlog.oldest_age_seconds",
+		"openoutbox.backlog.oldest_age_seconds",
 		metric.WithDescription("Age of the oldest pending event in the outbox table."),
 	)
 	if err != nil {
