@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_processing_queue
 
 CREATE INDEX IF NOT EXISTS idx_outbox_stuck_leases
     ON public.outbox_events USING btree
-    (locked_at ASC NULLS LAST)
+    (locked_at ASC NULLS FIRST)
     TABLESPACE pg_default
     WHERE status = 'DELIVERING'::text;
 
@@ -47,4 +47,5 @@ CREATE INDEX IF NOT EXISTS idx_outbox_metrics_lag
     (status COLLATE pg_catalog."default" ASC NULLS LAST, created_at ASC NULLS LAST)
     TABLESPACE pg_default
     WHERE status = 'PENDING'::text;
+
 "
