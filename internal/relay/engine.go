@@ -2,7 +2,9 @@ package relay
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,7 +51,7 @@ func NewEngine(
 ) *Engine {
 
 	return &Engine{
-		relayId:       "change latter",
+		relayId:       generateRelayID(),
 		storage:       storage,
 		publisher:     publisher,
 		interval:      interval,
@@ -345,4 +347,18 @@ func (p RetryPolicy) NextBackoff(attempts int) (time.Duration, bool) {
 	jitter := time.Duration(rand.Int63n(int64(delay / 10)))
 
 	return delay + jitter, true
+}
+
+func generateRelayID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown-relay"
+	}
+
+	// Add a short random suffix (e.g., relay-worker-6f2d)
+	// to prevent collisions if a Pod restarts quickly and the DB
+	// hasn't cleared the old "DELIVERING" rows yet.
+	suffix := uuid.New().String()[:4]
+
+	return fmt.Sprintf("%s-%s", hostname, suffix)
 }
