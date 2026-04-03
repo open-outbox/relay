@@ -207,19 +207,19 @@ func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Dura
 	query := `
         WITH stuck_events AS (
             SELECT event_id 
-            FROM openoutbox_events
+            FROM outbox_events
             WHERE status = 'DELIVERING'
               AND locked_at < (now() - $1::interval)
             ORDER BY locked_at ASC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
         )
-        UPDATE openoutbox_events
+        UPDATE outbox_events
         SET status = 'PENDING',
             locked_by = NULL,
-            locked_at = NULL,
+            locked_at = NULL
         FROM stuck_events
-        WHERE openoutbox_events.event_id = stuck_events.event_id
+        WHERE outbox_events.event_id = stuck_events.event_id
     `
 
 	result, err := p.pool.Exec(ctx, query, durationToInterval(leaseTimeout), limit)
