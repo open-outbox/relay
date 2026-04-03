@@ -2,7 +2,6 @@ package relay
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"time"
 
@@ -83,8 +82,18 @@ func (e *Engine) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := e.process(ctx); err != nil {
-				log.Printf("Process error: %v", err)
+			count, err := e.process(ctx)
+			if err != nil {
+				// On error, wait a bit so we don't spam a failing DB/Broker
+				e.logger.Error("Process error", zap.Error(err))
+				time.Sleep(e.interval)
+				continue
+			}
+
+			// GUARD: If the pond isn't full, take a break.
+			if count < e.batchSize {
+				time.Sleep(e.interval)
+				continue
 			}
 		}
 	}
@@ -129,7 +138,7 @@ func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
 	}
 }
 
-func (e *Engine) process(ctx context.Context) error {
+func (e *Engine) process(ctx context.Context) (int, error) {
 
 	e.logger.Debug("Engine processing...")
 
@@ -145,7 +154,7 @@ func (e *Engine) process(ctx context.Context) error {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		e.logger.Error("failed to fetch events.", zap.Error(err))
-		return err
+		return 0, err
 	}
 	e.metrics.StorageLatency.Record(ctx, time.Since(claimStart).Seconds(),
 		metric.WithAttributes(attribute.String("op", "claim")))
@@ -160,7 +169,7 @@ func (e *Engine) process(ctx context.Context) error {
 	for _, event := range events {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return 0, ctx.Err()
 		default:
 		}
 
@@ -240,7 +249,7 @@ func (e *Engine) process(ctx context.Context) error {
 			finalizeSpan.SetStatus(codes.Error, err.Error())
 			finalizeSpan.End()
 			e.logger.Error("failed to mark batch as delivered", zap.Error(err))
-			return err
+			return 0, err
 		}
 		finalizeSpan.End()
 
@@ -270,12 +279,12 @@ func (e *Engine) process(ctx context.Context) error {
 			failSpan.SetStatus(codes.Error, err.Error())
 			failSpan.End()
 			e.logger.Error("failed to mark failure batch", zap.Error(err))
-			return err
+			return 0, err
 		}
 		failSpan.End()
 	}
 
-	return nil
+	return len(events), nil
 }
 
 func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
