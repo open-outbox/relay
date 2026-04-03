@@ -19,8 +19,8 @@ type MockStorage struct {
 	mock.Mock
 }
 
-func (m *MockStorage) ClaimBatch(ctx context.Context, relayId string, size int, lease int) ([]Event, error) {
-	args := m.Called(ctx, relayId, size, lease)
+func (m *MockStorage) ClaimBatch(ctx context.Context, relayId string, size int) ([]Event, error) {
+	args := m.Called(ctx, relayId, size)
 	return args.Get(0).([]Event), args.Error(1)
 }
 
@@ -32,6 +32,16 @@ func (m *MockStorage) MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID, r
 func (m *MockStorage) MarkFailedBatch(ctx context.Context, failed []FailedEvent, relayId string) error {
 	args := m.Called(ctx, failed, relayId)
 	return args.Error(0)
+}
+
+func (m *MockStorage) GetStats(ctx context.Context) (Stats, error) {
+	args := m.Called()
+	return args.Get(0).(Stats), args.Error(1)
+}
+
+func (m *MockStorage) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error) {
+	args := m.Called()
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockStorage) Close() error {
@@ -115,10 +125,10 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 
 	// 2. Define Expectations (The "Contract")
 	ctx := mock.Anything
-	relayID := "test-relay"
+	relayID := "change latter"
 
 	// Expect: Claim 1 event
-	mockStorage.On("ClaimBatch", ctx, relayID, 10, 5).
+	mockStorage.On("ClaimBatch", ctx, relayID, 10).
 		Return([]Event{fakeEvent}, nil)
 
 	// Expect: Publish that 1 event
@@ -139,16 +149,16 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		mockPublisher,
 		1*time.Second,
 		10,
-		5,
+		1*time.Second,
+		10,
 		zap.NewNop(),
 		metrics, // Ensure your Metrics struct handles nil or use a mock
 		tracenoop.NewTracerProvider(),
 		metricnoop.NewMeterProvider(),
 	)
-	e.relayId = relayID // Override for the test
 
 	// 4. Execution
-	err = e.process(context.Background())
+	_, err = e.process(context.Background())
 
 	// 5. Assertions
 	assert.NoError(t, err)
@@ -165,7 +175,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	event2 := Event{ID: id2, Type: "fail.event"}
 
 	// 1. Return BOTH events
-	mockStorage.On("ClaimBatch", mock.Anything, "test-relay", 10, 5).
+	mockStorage.On("ClaimBatch", mock.Anything, "change latter", 10).
 		Return([]Event{event1, event2}, nil)
 
 	// 2. Event 1: Publish Success
@@ -178,13 +188,13 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 
 	// 4. Verify BOTH storage updates happen
 	// Success side:
-	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, "test-relay").
+	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, "change latter").
 		Return(nil)
 
 	// Failure side: (Notice we check for id2 here)
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
-	}), "test-relay").Return(nil)
+	}), "change latter").Return(nil)
 
 	// Initialize & Run
 	// 3. Initialize Engine
@@ -197,14 +207,15 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		mockPublisher,
 		1*time.Second,
 		10,
+		1*time.Second,
 		5,
 		zap.NewNop(),
 		metrics, // Ensure your Metrics struct handles nil or use a mock
 		tracenoop.NewTracerProvider(),
 		metricnoop.NewMeterProvider(),
 	)
-	e.relayId = "test-relay"
-	err = e.process(context.Background())
+	e.relayId = "change latter"
+	_, err = e.process(context.Background())
 
 	assert.NoError(t, err)
 	mockStorage.AssertExpectations(t)
