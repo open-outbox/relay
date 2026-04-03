@@ -1,0 +1,17 @@
+sum by (status) (rate(openoutbox_events_total[5m]))
+
+sum(openoutbox_backlog_pending_count)
+deriv(openoutbox_backlog_pending_count[5m])
+predict_linear(openoutbox_backlog_pending_count[15m], 3600)
+openoutbox_backlog_pending_count > 0 and rate(openoutbox_events_total[5m]) == 0
+
+sum(openoutbox_backlog_oldest_age_seconds)
+deriv(openoutbox_backlog_oldest_age_seconds[5m])
+predict_linear(openoutbox_backlog_oldest_age_seconds[15m], 3600)
+openoutbox_backlog_oldest_age_seconds > 0 and rate(openoutbox_backlog_oldest_age_seconds[5m]) == 0
+
+histogram_quantile(0.95, sum by (le) (rate(openoutbox_storage_latency_bucket[5m])))
+histogram_quantile(0.95, sum by (le) (rate(openoutbox_publisher_latency_bucket[5m])))
+histogram_quantile(0.95, sum by (le) (rate(openoutbox_events_e2e_latency_bucket[5m])))
+
+

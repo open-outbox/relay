@@ -6,6 +6,9 @@ receivers:
 
 processors:
   batch:
+  batch/fast:
+    timeout: 1s
+    send_batch_size: 50
     
 exporters:
   
@@ -19,6 +22,9 @@ exporters:
       insecure: true
   otlphttp/prometheus:
     endpoint: "http://prometheus:9090/api/v1/otlp"
+    sending_queue:
+      enabled: true
+      queue_size: 100
     tls:
       insecure: true
 
@@ -30,5 +36,5 @@ service:
       exporters: [debug, otlp/jaeger]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [batch/fast]
       exporters: [otlphttp/prometheus, debug]

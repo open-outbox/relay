@@ -105,7 +105,30 @@ func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
 
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	ctx := context.Background()
-
+	var customBuckets = []float64{
+		.0005, // 500µs (Micro-latencies)
+		.001,  // 1ms
+		.0025, // 2.5ms
+		.005,  // 5ms
+		.01,   // 10ms
+		.025,  // 25ms
+		.05,   // 50ms
+		.1,    // 100ms
+		.25,   // 250ms
+		.5,    // 500ms
+		1,     // 1s (The "Warning" threshold)
+		2.5,   // 2.5s
+		5,     // 5s
+		10,    // 10s (The "Critical/Timeout" threshold)
+	}
+	latencyView := metric.NewView(
+		metric.Instrument{Name: "openoutbox.*.latency"},
+		metric.Stream{
+			Aggregation: metric.AggregationExplicitBucketHistogram{
+				Boundaries: customBuckets,
+			},
+		},
+	)
 	metricReader, err := autoexport.NewMetricReader(ctx)
 	if err != nil {
 		return nil, err
@@ -113,7 +136,9 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 
 	mp := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metricReader))
+		metric.WithReader(metricReader),
+		metric.WithView(latencyView),
+	)
 
 	return mp, nil
 }
