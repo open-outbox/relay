@@ -92,7 +92,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			count, err := e.process(ctx)
-			if err != nil && err != context.Canceled{
+			if !telemetry.IsSilent(err) {
 				// On error, wait a bit so we don't spam a failing DB/Broker
 				e.logger.Error("Process error", zap.Error(err))
 				time.Sleep(e.interval)
@@ -130,9 +130,7 @@ func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
 
 	_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
 
-	if err != nil && err != context.Canceled {
-		e.logger.Error("failed to fetch events.", zap.Error(err))
-	}
+	e.LogIfError(err, "failed to fetch events.", zap.Error(err))
 
 	for {
 		select {
@@ -140,9 +138,7 @@ func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
-			if err != nil && err != context.Canceled {
-				e.logger.Error("failed to fetch events.", zap.Error(err))
-			}
+			e.LogIfError(err, "failed to fetch events.", zap.Error(err))
 		}
 	}
 }
@@ -159,7 +155,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	claimStart := time.Now()
 	// Claim a batch of events
 	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize)
-	if err != nil && err != context.Canceled {
+	if !telemetry.IsSilent(err) {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		e.logger.Error("failed to fetch events.", zap.Error(err))
@@ -199,7 +195,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 		e.metrics.PublisherLatency.Record(ctx, time.Since(publishStart).Seconds(),
 			metric.WithAttributes(attribute.String("type", event.Type)))
 
-		if err != nil && err != context.Canceled {
+		if !telemetry.IsSilent(err) {
 			// Add event to failed events
 			failedEvents = append(failedEvents, e.assessFailure(event, err))
 
@@ -253,7 +249,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			),
 		)
 
-		if err != nil && err != context.Canceled {
+		if !telemetry.IsSilent(err) {
 			finalizeSpan.RecordError(err)
 			finalizeSpan.SetStatus(codes.Error, err.Error())
 			finalizeSpan.End()
@@ -283,7 +279,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			),
 		)
 
-		if err != nil && err != context.Canceled {
+		if !telemetry.IsSilent(err) {
 			failSpan.RecordError(err)
 			failSpan.SetStatus(codes.Error, err.Error())
 			failSpan.End()
@@ -319,7 +315,7 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 
 	stats, err := e.storage.GetStats(ctx)
-	if err != nil && err != context.Canceled {
+	if !telemetry.IsSilent(err) {
 
 		e.logger.Warn("telemetry: failed to retrieve backlog stats",
 			zap.Error(err),
@@ -344,4 +340,11 @@ func generateRelayID() string {
 	suffix := uuid.New().String()[:4]
 
 	return fmt.Sprintf("%s-%s", hostname, suffix)
+}
+
+func (e *Engine) LogIfError(err error, msg string, fields ...zap.Field) {
+	if telemetry.IsSilent(err) {
+		return
+	}
+	e.logger.Error(msg, append(fields, zap.Error(err))...)
 }

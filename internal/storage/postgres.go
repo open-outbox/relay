@@ -62,7 +62,7 @@ func (p *Postgres) ClaimBatch(
 		relay.StatusDelivering,
 		relayID,
 	)
-	if err != nil && err != context.Canceled {
+	if err != nil {
 		return nil, fmt.Errorf("failed to claim batch: %w", err)
 	}
 	defer rows.Close()
@@ -79,13 +79,13 @@ func (p *Postgres) ClaimBatch(
 			&e.Attempts,
 			&e.CreatedAt,
 		)
-		if err != nil && err != context.Canceled {
+		if err != nil {
 			return nil, fmt.Errorf("event scan error: %w", err)
 		}
 		events = append(events, e)
 	}
 
-	if err = rows.Err(); err != nil && err != context.Canceled {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows stream error: %w", err)
 	}
 
@@ -122,7 +122,7 @@ func (p *Postgres) MarkDeliveredBatch(
 		relayID,
 	)
 
-	if err != nil && err != context.Canceled {
+	if err != nil {
 		return fmt.Errorf("failed to mark batch delivered: %w", err)
 	}
 
@@ -188,7 +188,7 @@ func (p *Postgres) MarkFailedBatch(
 		relayID,
 	)
 
-	if err != nil && err != context.Canceled {
+	if err != nil {
 		return fmt.Errorf("failed to mark batch failures: %w", err)
 	}
 
