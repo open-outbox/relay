@@ -3,6 +3,7 @@
 volumes:
   pg_data: {}
   redis_data: {}
+  nats_data:
 
 services:
 
@@ -25,10 +26,14 @@ services:
       - "-c archive_mode=off"
 
   nats:
-    image: nats:2.9
+    image: nats:latest
     ports:
-      - "4222:4222" # Client port
-      - "8222:8222" # HTTP Management port
+      - "4222:4222" 
+      - "8222:8222" 
+    # -js enables JetStream, -sd sets storage directory
+    command: ["-js", "-sd", "/data", "-m", "8222"] 
+    volumes:
+      - nats_data:/data
 
   nats-box:
     image: natsio/nats-box
