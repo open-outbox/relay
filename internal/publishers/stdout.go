@@ -21,10 +21,15 @@ func NewStdout() *Stdout {
 // Publish satisfies the relay.Publisher interface.
 // It formats the event as a string and writes it to standard output.
 func (s *Stdout) Publish(ctx context.Context, event relay.Event) error {
-	_, err := fmt.Fprintf(os.Stdout, "ID: %s | TYPE: %s | PAYLOAD: %s\n",
+	headersStr := "{}"
+	if len(event.Headers) > 0 {
+		headersStr = string(event.Headers)
+	}
+	_, err := fmt.Fprintf(os.Stdout, "ID: %s | TYPE: %s | PAYLOAD: %s | HEADERS %s\n",
 		event.ID,
 		event.Type,
 		string(event.Payload),
+		headersStr,
 	)
 
 	if err != nil {
