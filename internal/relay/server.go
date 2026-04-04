@@ -3,9 +3,12 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"go.uber.org/zap"
 )
@@ -24,6 +27,14 @@ func registerHandlers(s *Server, mux *http.ServeMux) {
 func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) *Server {
 
 	mux := http.NewServeMux()
+	handler := otelhttp.NewHandler(mux, "server-request",
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			// This is a bit of a hack for the default mux
+			// It uses the Method + Path as the span name
+			return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+		}),
+	)
+
 	srv := &Server{
 		storage: s,
 		logger:  logger,
@@ -32,7 +43,7 @@ func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) 
 			BaseContext:  func(net.Listener) context.Context { return ctx },
 			ReadTimeout:  time.Second,
 			WriteTimeout: 10 * time.Second,
-			Handler:      mux,
+			Handler:      handler,
 		},
 	}
 	registerHandlers(srv, mux)
