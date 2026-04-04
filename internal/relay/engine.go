@@ -105,6 +105,29 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 }
 
+// Stop handles the graceful cleanup of the Engine's dependencies.
+func (e *Engine) Stop() error {
+    e.logger.Info("Stopping engine: shutting down storage and publisher...")
+    
+    var errs []error
+
+    // We close storage first to stop picking up new work
+    if err := e.storage.Close(); err != nil {
+        errs = append(errs, fmt.Errorf("storage close: %w", err))
+    }
+
+    if err := e.publisher.Close(); err != nil {
+        errs = append(errs, fmt.Errorf("publisher close: %w", err))
+    }
+
+    if len(errs) > 0 {
+        // join errors if using Go 1.20+
+        return errors.Join(errs...)
+    }
+
+    return nil
+}
+
 func (e *Engine) watchBacklog(ctx context.Context) error {
 	ticker := time.NewTicker(defaultWatchInterval)
 	defer ticker.Stop()

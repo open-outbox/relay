@@ -43,8 +43,6 @@ func run() error {
 		func(
 			engine *relay.Engine,
 			api *relay.Server,
-			storage relay.Storage,
-			publisher relay.Publisher,
 			logger *zap.Logger,
 			tp *telemetry.OTelProviders,
 		) error {
@@ -52,21 +50,17 @@ func run() error {
 			defer func() { _ = logger.Sync() }()
 
 			defer func() {
-				logger.Info("Shutting down storage and publisher...")
-				if err := storage.Close(); err != nil {
-					logger.Error("Failed to close storage", zap.Error(err))
-				}
-				if err := publisher.Close(); err != nil {
-					logger.Error("Failed to close publisher", zap.Error(err))
-				}
-			}()
-
-			defer func() {
 				logger.Info("Flushing telemetry data...")
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				if err := tp.Shutdown(shutdownCtx); err != nil {
 					logger.Error("OTel shutdown failed", zap.Error(err))
+				}
+			}()
+
+			defer func() {
+				if err := engine.Stop(); err != nil {
+					logger.Error("Failed to stop engine cleanly", zap.Error(err))
 				}
 			}()
 
