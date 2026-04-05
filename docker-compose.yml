@@ -3,7 +3,8 @@
 volumes:
   pg_data: {}
   redis_data: {}
-  nats_data:
+  nats_data: {}
+  kafka_data: {}
 
 services:
 
@@ -18,12 +19,6 @@ services:
       - 5432:5432
     volumes:
       - pg_data:/var/lib/postgresql/data
-    command: 
-      - "postgres"
-      - "-c max_wal_size=2GB"      
-      - "-c min_wal_size=512MB"
-      - "-c checkpoint_timeout=5min"
-      - "-c archive_mode=off"
 
   nats:
     image: nats:latest
@@ -92,3 +87,33 @@ services:
       - 4317:4317 # OTLP gRPC receiver
       - 4318:4318 # OTLP http receiver
       - 55679:55679 # zpages extension
+  kafka:
+    image: apache/kafka:3.7.0
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
+      - KAFKA_LISTENERS=EXTERNAL://:9092,INTERNAL://:9094,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://localhost:9092,INTERNAL://kafka:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+    volumes:
+      - kafka_data:/bitnami/kafka
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9094
+      - KAFKA_CLUSTERS_0_METRICS_PORT=9997
+    depends_on:
+      - kafka

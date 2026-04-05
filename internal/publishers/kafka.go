@@ -2,6 +2,7 @@ package publishers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,34 +16,73 @@ type Kafka struct {
 	writer *kafka.Writer
 }
 
-// NewKafka initializes a new Kafka writer.
-// brokers should be in the format "host1:9092,host2:9092" or "kafka://host1:9092".
+// NewKafka initializes a new Kafka writer with strict ordering and safety.
 func NewKafka(brokers string) *Kafka {
 	brokerList := strings.Split(strings.TrimPrefix(brokers, "kafka://"), ",")
 
 	return &Kafka{
 		writer: &kafka.Writer{
-			Addr:         kafka.TCP(brokerList...),
-			Balancer:     &kafka.LeastBytes{},
+			Addr: kafka.TCP(brokerList...),
+
+			// USE THE HASH BALANCER
+			// Ensures events with the same Key land in the same partition.
+			Balancer: &kafka.Hash{},
+
+			// AT-LEAST-ONCE SAFETY
+			// Require all in-sync replicas to ack the message.
 			RequiredAcks: kafka.RequireAll,
-			Async:        false,
+
+			// RETRY LOGIC
+			MaxAttempts: 5,
+			Async: false,
+
 		},
 	}
 }
 
-// Publish satisfies the relay.Publisher interface.
-// It writes the event to Kafka and waits for a broker confirmation if configured.
+// Publish writes the event to Kafka using the PartitionKey for ordering.
 func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
-	msg := kafka.Message{
-		Key:   []byte(event.ID.String()),
-		Topic: event.Type,
-		Value: event.Payload,
+	var kafkaKey []byte
+	if event.PartitionKey != "" {
+		kafkaKey = []byte(event.PartitionKey)
 	}
 
+	var userHeaders map[string]string
+	if len(event.Headers) > 0 {
+		if err := json.Unmarshal(event.Headers, &userHeaders); err != nil {
+			return &relay.PublishError{
+				Err:         fmt.Errorf("failed to unmarshal event headers: %w", err),
+				IsRetryable: false,
+				Code:        "INVALID_HEADERS",
+			}
+		}
+	}
+
+	headers := make([]kafka.Header, 0, len(userHeaders)+1)
+
+	for key, value := range userHeaders {
+		headers = append(headers, kafka.Header{
+			Key:   key,
+			Value: []byte(value),
+		})
+	}
+
+	headers = append(headers, kafka.Header{
+		Key:   "X-Event-ID",
+		Value: []byte(event.ID.String()),
+	})
+
+	msg := kafka.Message{
+		Key:     kafkaKey,
+		Topic:   event.Type,
+		Value:   event.Payload,
+		Headers: headers,
+	}
+	// fmt.Printf("Publishing to Topic: [%s]\n", event.Type)
 	err := k.writer.WriteMessages(ctx, msg)
 	if err != nil {
 		return &relay.PublishError{
-			Err:         fmt.Errorf("kafka publish failed: %w", err),
+			Err:         fmt.Errorf("kafka write failed: %w", err),
 			IsRetryable: isKafkaErrorRetryable(err),
 			Code:        "KAFKA_WRITE_ERROR",
 		}
