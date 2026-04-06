@@ -1,4 +1,4 @@
-.PHONY: run producer test clean fmt lint up down setup
+.PHONY: run producer test clean fmt lint up down setup docs
 
 # Start the infrastructure
 up:
@@ -23,6 +23,10 @@ fmt:
 # Run linters
 lint: fmt
 	golangci-lint run ./...
+
+# Docs
+docs: 
+	pkgsite -open .
 
 # Install development dependencies
 setup:
