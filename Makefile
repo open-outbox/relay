@@ -133,17 +133,24 @@ nats-info:
 # Create the required Kafka topics with 3 partitions
 kafka-setup:
 	@chmod +x scripts/kafka/setup-topics.sh
-	./scripts/kafka/setup-topics.sh $(PUBLISHER_URL) $(TOPIC_NAME) 3
+	./scripts/kafka/setup-topics.sh $(KAFKA_URL) $(TOPIC_NAME) 3
 
 # List all existing topics in the Kafka cluster
 kafka-list:
 	docker-compose -f $(COMPOSE_FILE) exec kafka \
-		/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(PUBLISHER_URL)
+		/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(KAFKA_URL)
+
+# Deep dive into the configuration and partition status of the topic
+kafka-info:
+	docker-compose -f $(COMPOSE_FILE) exec kafka \
+		/opt/kafka/bin/kafka-topics.sh --describe \
+		--topic $(TOPIC_NAME) \
+		--bootstrap-server $(KAFKA_URL)
 
 # Tail messages from the beginning of the topic in real-time
 kafka-tail:
 	docker-compose -f $(COMPOSE_FILE) exec kafka \
-		/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(PUBLISHER_URL) --topic $(TOPIC_NAME) --from-beginning
+		/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(KAFKA_URL) --topic $(TOPIC_NAME) --from-beginning
 
 # ==========================================
 # Observability

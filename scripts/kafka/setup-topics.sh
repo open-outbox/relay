@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configuration
-BOOTSTRAP_SERVER=${1:-"localhost:9092"}
-TOPIC_NAME=${2:-"outbox.events."}
+BOOTSTRAP_SERVER=${1:-"kafka:9092"}
+TOPIC_NAME=${2:-"outbox.events.v1"}
 PARTITIONS=${3:-3}
 
 echo "Configuring Kafka Topic: $TOPIC_NAME..."

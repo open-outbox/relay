@@ -9,9 +9,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
   --config retention.ms=604800000
 
 
-docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
-  --list \
-  --bootstrap-server localhost:9092
+
 
 # Deep dive into a specific topic
 docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
