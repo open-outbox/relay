@@ -2,7 +2,7 @@
 
 # Configuration - Match your .env OTel settings
 ENDPOINT=${1:-"localhost:4317"}
-TRACE_COUNT=${2:-1}
+TRACE_COUNT=${2:-100}
 
 echo "Sending $TRACE_COUNT test traces to $ENDPOINT..."
 

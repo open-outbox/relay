@@ -11,6 +11,8 @@ MAIN_PACKAGE        := ./cmd/relay/main.go
 PRODUCER_PKG        := ./cmd/producer/main.go
 KAFKA_URL           := kafka:9092
 NATS_URL            := nats:4222
+OTEL_ENDPOINT       := localhost:4317
+
 
 # Map LOCAL_ env vars to internal Make variables for cleaner targets
 TOPIC_NAME          := $(LOCAL_TEST_TOPIC)
