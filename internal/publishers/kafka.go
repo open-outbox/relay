@@ -6,10 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/segmentio/kafka-go"
 )
+
+// KafkaConfig holds all the externalized settings for the Kafka publisher.
+type KafkaConfig struct {
+	Brokers      string
+	MaxAttempts  int
+	WriteTimeout time.Duration
+	ReadTimeout  time.Duration
+	BatchSize    int
+	BatchBytes   int64
+	BatchTimeout time.Duration
+	Async        bool
+	Compression  kafka.Compression
+	RequiredAcks kafka.RequiredAcks
+}
 
 // Kafka implements the relay.Publisher interface using the segmentio/kafka-go client.
 type Kafka struct {
@@ -17,24 +32,25 @@ type Kafka struct {
 }
 
 // NewKafka initializes a new Kafka writer with strict ordering and safety.
-func NewKafka(brokers string) *Kafka {
-	brokerList := strings.Split(strings.TrimPrefix(brokers, "kafka://"), ",")
+func NewKafka(cfg KafkaConfig) *Kafka {
+	brokerList := strings.Split(strings.TrimPrefix(cfg.Brokers, "kafka://"), ",")
 
 	return &Kafka{
 		writer: &kafka.Writer{
-			Addr: kafka.TCP(brokerList...),
+			Addr:         kafka.TCP(brokerList...),
+			Balancer:     &kafka.Hash{},
+			RequiredAcks: cfg.RequiredAcks,
+			Async:        cfg.Async,
 
-			// USE THE HASH BALANCER
-			// Ensures events with the same Key land in the same partition.
-			Balancer: &kafka.Hash{},
+			MaxAttempts:  cfg.MaxAttempts,
+			WriteTimeout: cfg.WriteTimeout,
+			ReadTimeout:  cfg.ReadTimeout,
 
-			// AT-LEAST-ONCE SAFETY
-			// Require all in-sync replicas to ack the message.
-			RequiredAcks: kafka.RequireAll,
-
-			// RETRY LOGIC
-			MaxAttempts: 5,
-			Async:       false,
+			// Critical Performance Overrides
+			BatchSize:    cfg.BatchSize,
+			BatchBytes:   cfg.BatchBytes,
+			BatchTimeout: cfg.BatchTimeout,
+			Compression:  cfg.Compression,
 		},
 	}
 }

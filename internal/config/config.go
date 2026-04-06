@@ -40,6 +40,17 @@ type Config struct {
 
 	//NATS configs
 	NatsFlushTimeout time.Duration `mapstructure:"NATS_FLUSH_TIMEOUT"`
+
+	// Kafka Tuning
+	KafkaMaxAttempts  int           `mapstructure:"KAFKA_MAX_ATTEMPTS"`
+	KafkaWriteTimeout time.Duration `mapstructure:"KAFKA_WRITE_TIMEOUT"`
+	KafkaReadTimeout  time.Duration `mapstructure:"KAFKA_READ_TIMEOUT"`
+	KafkaBatchSize    int           `mapstructure:"KAFKA_BATCH_SIZE"`
+	KafkaBatchBytes   int64         `mapstructure:"KAFKA_BATCH_BYTES"`
+	KafkaBatchTimeout time.Duration `mapstructure:"KAFKA_BATCH_TIMEOUT"`
+	KafkaAsync        bool          `mapstructure:"KAFKA_ASYNC"`
+	KafkaCompression  string        `mapstructure:"KAFKA_COMPRESSION"`
+	KafkaRequiredAcks string        `mapstructure:"KAFKA_REQUIRED_ACKS"`
 }
 
 func Load() (*Config, error) {
@@ -63,6 +74,17 @@ func Load() (*Config, error) {
 
 	// NATS Defaults
 	v.SetDefault("NATS_FLUSH_TIMEOUT", "5s")
+
+	// Kafka optimized defaults
+	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
+	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
+	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
+	v.SetDefault("KAFKA_BATCH_SIZE", 1)         // Critical: prevent the 1s stall
+	v.SetDefault("KAFKA_BATCH_BYTES", 10485760) // 10MB
+	v.SetDefault("KAFKA_BATCH_TIMEOUT", "10ms")
+	v.SetDefault("KAFKA_ASYNC", false)
+	v.SetDefault("KAFKA_COMPRESSION", "none") // "none", "snappy", "gzip", "lz4", "zstd"
+	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 
 	// Read from .env or config.yaml (Optional)
 	v.SetConfigName("config")

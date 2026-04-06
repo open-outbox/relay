@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
@@ -10,6 +11,8 @@ import (
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
 	"github.com/open-outbox/relay/internal/telemetry"
+	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/compress"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/dig"
@@ -81,7 +84,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return publishers.NewNats(cfg.PublisherURL, cfg.NatsFlushTimeout)
 
 			case "kafka":
-				return publishers.NewKafka(cfg.PublisherURL), nil
+				return buildKafkaPublisher(*cfg)
 
 			case "redis":
 				return publishers.NewRedis(cfg.PublisherURL)
@@ -136,4 +139,51 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 
 	return c, nil
 
+}
+
+func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
+	// Compression Mapping
+	compressionMap := map[string]kafka.Compression{
+		"gzip":   compress.Gzip,
+		"snappy": compress.Snappy,
+		"lz4":    compress.Lz4,
+		"zstd":   compress.Zstd,
+		"none":   compress.None,
+	}
+
+	comp, ok := compressionMap[strings.ToLower(cfg.KafkaCompression)]
+	if !ok {
+		return nil, fmt.Errorf("unsupported Kafka Compression type: %s", cfg.KafkaCompression)
+	}
+
+	// Required Acks Mapping
+	// We allow both human-readable strings and common string-integers
+	acksMap := map[string]kafka.RequiredAcks{
+		"all":  kafka.RequireAll,  // -1
+		"one":  kafka.RequireOne,  // 1
+		"none": kafka.RequireNone, // 0
+		"-1":   kafka.RequireAll,
+		"1":    kafka.RequireOne,
+		"0":    kafka.RequireNone,
+	}
+
+	acks, ok := acksMap[strings.ToLower(cfg.KafkaRequiredAcks)]
+
+	if !ok {
+		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaCompression)
+	}
+
+	kCfg := publishers.KafkaConfig{
+		Brokers:      cfg.PublisherURL,
+		MaxAttempts:  cfg.KafkaMaxAttempts,
+		WriteTimeout: cfg.KafkaWriteTimeout,
+		ReadTimeout:  cfg.KafkaReadTimeout,
+		BatchSize:    cfg.KafkaBatchSize,
+		BatchBytes:   cfg.KafkaBatchBytes,
+		BatchTimeout: cfg.KafkaBatchTimeout,
+		Async:        cfg.KafkaAsync,
+		RequiredAcks: acks,
+		Compression:  comp,
+	}
+	return publishers.NewKafka(kCfg), nil
 }
