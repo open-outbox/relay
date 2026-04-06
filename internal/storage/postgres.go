@@ -12,16 +12,24 @@ import (
 	"github.com/open-outbox/relay/internal/relay"
 )
 
+// Postgres is a PostgreSQL-backed implementation of the relay.Storage interface.
+// It uses the jackc/pgx/v5 library for efficient connection pooling and
+// PostgreSQL-specific optimizations.
 type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// NewPostgres creates a new storage backed by a connection pool.
+// NewPostgres creates a new Postgres storage instance using the provided pgx connection pool.
 func NewPostgres(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{pool: pool}
 }
 
-// Fetch pulls pending events from the DB.
+// ClaimBatch atomically selects and locks a batch of pending events for the current relay instance.
+//
+// It uses a Common Table Expression (CTE) with 'FOR UPDATE SKIP LOCKED' to ensure that:
+// 1. Multiple relay instances can process the table concurrently without colliding.
+// 2. Only events that are PENDING and past their available_at time are selected.
+// 3. Selected events are immediately marked as DELIVERING to "lease" them to this instance.
 func (p *Postgres) ClaimBatch(
 	ctx context.Context,
 	relayID string,
@@ -92,6 +100,9 @@ func (p *Postgres) ClaimBatch(
 	return buf[:i], nil
 }
 
+// MarkDeliveredBatch updates a set of events to the DELIVERED status.
+// It requires the relayID to match the current lock to ensure that an instance
+// doesn't accidentally mark an event as delivered if it has already been reaped.
 func (p *Postgres) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
@@ -129,6 +140,11 @@ func (p *Postgres) MarkDeliveredBatch(
 	return nil
 }
 
+// MarkFailedBatch updates multiple events that failed during publishing.
+//
+// It uses the PostgreSQL UNNEST function to perform a single atomic batch update,
+// which is significantly more efficient than individual UPDATE statements.
+// It updates the status, increases the attempt count, and sets the next available_at time.
 func (p *Postgres) MarkFailedBatch(
 	ctx context.Context,
 	failures []relay.FailedEvent,
@@ -153,7 +169,6 @@ func (p *Postgres) MarkFailedBatch(
 		errors[i] = f.LastError
 	}
 
-	// 2. The Atomic Update with UNNEST
 	query := `
         UPDATE outbox_events AS e
         SET 
@@ -193,19 +208,19 @@ func (p *Postgres) MarkFailedBatch(
 	}
 
 	if res.RowsAffected() < int64(n) {
-		// "We lost the lease on some rows while we were processing them."
 		log.Warn("Lease expired during processing for some events")
 	}
 
 	return nil
 }
 
+// ReapExpiredLeases identifies and resets events that have been stuck in the DELIVERING
+// state for longer than the specified leaseTimeout.
+//
+// This is a critical recovery mechanism. If a relay instance crashes while processing
+// a batch, this function allows other instances to eventually pick up those "orphaned"
+// events by moving them back to the PENDING state.
 func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error) {
-	// We use a CTE (WITH block) to:
-	// 1. Find the oldest stuck leases (ORDER BY locked_at)
-	// 2. Limit the impact
-	// 3. Prevent multiple reapers from fighting (SKIP LOCKED)
-
 	query := `
         WITH stuck_events AS (
             SELECT event_id 
@@ -235,6 +250,8 @@ func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Dura
 	return result.RowsAffected(), nil
 }
 
+// GetStats retrieves high-level metrics from the outbox table, such as the total
+// number of pending events and the age of the oldest message in the queue.
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
@@ -253,16 +270,14 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	return stats, err
 }
 
+// Close gracefully shuts down the underlying pgx connection pool.
 func (p *Postgres) Close() error { p.pool.Close(); return nil }
 
 func durationToInterval(d time.Duration) string {
-	// simplest portable interval literal
-	// e.g. "1.5s" -> "1500 milliseconds"
 	ms := d.Milliseconds()
 	return fmtIntervalMillis(ms)
 }
 
 func fmtIntervalMillis(ms int64) string {
-	// Postgres interval accepts "123 milliseconds"
 	return strconv.FormatInt(ms, 10) + " milliseconds"
 }
