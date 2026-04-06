@@ -1,8 +1,7 @@
-docker exec -it $(docker ps -qf "name=postgres") psql -U postgres -d postgres -c "
--- 1. Wipe the slate clean
+-- Wipe the slate clean for development
 DROP TABLE IF EXISTS outbox_events CASCADE;
 
--- Re-running the full CREATE for your reference:
+-- Create the core Outbox table
 CREATE TABLE outbox_events (
     event_id      UUID PRIMARY KEY,
     event_type    TEXT NOT NULL,
@@ -24,28 +23,21 @@ CREATE TABLE outbox_events (
     )
 );
 
+-- Optimization Indexes
 CREATE INDEX IF NOT EXISTS idx_outbox_processing_queue
-    ON public.outbox_events USING btree
-    (available_at ASC NULLS LAST, created_at ASC NULLS LAST)
-    TABLESPACE pg_default
-    WHERE status = 'PENDING'::text;
+    ON public.outbox_events (available_at ASC, created_at ASC)
+    WHERE status = 'PENDING';
 
 CREATE INDEX IF NOT EXISTS idx_outbox_stuck_leases
-    ON public.outbox_events USING btree
-    (locked_at ASC NULLS FIRST)
-    TABLESPACE pg_default
-    WHERE status = 'DELIVERING'::text;
+    ON public.outbox_events (locked_at ASC)
+    WHERE status = 'DELIVERING';
 
+-- Metrics-specific partial indexes
 CREATE INDEX IF NOT EXISTS idx_outbox_metrics_count
-    ON public.outbox_events USING btree
-    (status COLLATE pg_catalog."default" ASC NULLS LAST)
-    TABLESPACE pg_default
-    WHERE status = 'PENDING'::text;
+    ON public.outbox_events (status)
+    WHERE status = 'PENDING';
+
 
 CREATE INDEX IF NOT EXISTS idx_outbox_metrics_lag
-    ON public.outbox_events USING btree
-    (status COLLATE pg_catalog."default" ASC NULLS LAST, created_at ASC NULLS LAST)
-    TABLESPACE pg_default
+    ON public.outbox_events (status, created_at ASC)
     WHERE status = 'PENDING'::text;
-
-"

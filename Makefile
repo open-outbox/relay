@@ -13,11 +13,11 @@ KAFKA_URL           := kafka:9092
 NATS_URL            := nats:4222
 OTEL_ENDPOINT       := localhost:4317
 
-
 # Map LOCAL_ env vars to internal Make variables for cleaner targets
 TOPIC_NAME          := $(LOCAL_TEST_TOPIC)
 NATS_STREAM         := $(LOCAL_NATS_STREAM)
 OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
+DB_TYPE 			:= $(STORAGE_TYPE)
 
 .PHONY: all build run producer test clean fmt lint up down setup docs help ps logs
 
@@ -162,3 +162,21 @@ kafka-tail:
 test-otel:
 	@chmod +x scripts/otel/test-telemetry.sh
 	./scripts/otel/test-telemetry.sh $(OTEL_ENDPOINT) $(OTEL_TRACE_COUNT)
+
+
+# ==========================================
+# Database Management
+# ==========================================
+
+.PHONY: db-init
+# Automatically detects the STORAGE_TYPE and applies the correct schema
+db-init:
+	@echo "Initializing $(DB_TYPE) schema..."
+ifeq ($(DB_TYPE),postgres)
+	docker-compose -f $(COMPOSE_FILE) exec -T postgres \
+		psql -U postgres -d postgres < schema/postgres/openoutbox.sql
+else
+	@echo "Error: Unknown STORAGE_TYPE '$(DB_TYPE)'. Please check your .env"
+	@exit 1
+endif
+	@echo "$(DB_TYPE) schema applied."
