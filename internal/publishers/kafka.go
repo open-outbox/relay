@@ -34,14 +34,58 @@ func NewKafka(brokers string) *Kafka {
 
 			// RETRY LOGIC
 			MaxAttempts: 5,
-			Async: false,
-
+			Async:       false,
 		},
 	}
 }
 
 // Publish writes the event to Kafka using the PartitionKey for ordering.
 func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
+	msg, err := k.mapToKafkaMessage(event)
+	if err != nil {
+		return err
+	}
+
+	if err := k.writer.WriteMessages(ctx, msg); err != nil {
+		return &relay.PublishError{
+			Err:         fmt.Errorf("kafka write failed: %w", err),
+			IsRetryable: isKafkaErrorRetryable(err),
+			Code:        "KAFKA_WRITE_ERROR",
+		}
+	}
+	return nil
+}
+
+// PublishBatch writes multiple events in a single Kafka request.
+func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	msgs := make([]kafka.Message, 0, len(events))
+	for _, event := range events {
+		msg, err := k.mapToKafkaMessage(event)
+		if err != nil {
+			return err // Returns immediately if an event is malformed (Headers unmarshal fails)
+		}
+		msgs = append(msgs, msg)
+	}
+
+	// segmentio/kafka-go handles the batching/distribution internally
+	err := k.writer.WriteMessages(ctx, msgs...)
+	if err != nil {
+		return &relay.PublishError{
+			Err:         fmt.Errorf("kafka batch write failed: %w", err),
+			IsRetryable: isKafkaErrorRetryable(err),
+			Code:        "KAFKA_BATCH_WRITE_ERROR",
+		}
+	}
+
+	return nil
+}
+
+// mapToKafkaMessage is a helper to convert our domain Event to a Kafka message.
+func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	var kafkaKey []byte
 	if event.PartitionKey != "" {
 		kafkaKey = []byte(event.PartitionKey)
@@ -50,7 +94,7 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	var userHeaders map[string]string
 	if len(event.Headers) > 0 {
 		if err := json.Unmarshal(event.Headers, &userHeaders); err != nil {
-			return &relay.PublishError{
+			return kafka.Message{}, &relay.PublishError{
 				Err:         fmt.Errorf("failed to unmarshal event headers: %w", err),
 				IsRetryable: false,
 				Code:        "INVALID_HEADERS",
@@ -59,12 +103,8 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	}
 
 	headers := make([]kafka.Header, 0, len(userHeaders)+1)
-
 	for key, value := range userHeaders {
-		headers = append(headers, kafka.Header{
-			Key:   key,
-			Value: []byte(value),
-		})
+		headers = append(headers, kafka.Header{Key: key, Value: []byte(value)})
 	}
 
 	headers = append(headers, kafka.Header{
@@ -72,23 +112,12 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 		Value: []byte(event.ID.String()),
 	})
 
-	msg := kafka.Message{
+	return kafka.Message{
 		Key:     kafkaKey,
 		Topic:   event.Type,
 		Value:   event.Payload,
 		Headers: headers,
-	}
-	// fmt.Printf("Publishing to Topic: [%s]\n", event.Type)
-	err := k.writer.WriteMessages(ctx, msg)
-	if err != nil {
-		return &relay.PublishError{
-			Err:         fmt.Errorf("kafka write failed: %w", err),
-			IsRetryable: isKafkaErrorRetryable(err),
-			Code:        "KAFKA_WRITE_ERROR",
-		}
-	}
-
-	return nil
+	}, nil
 }
 
 // Close gracefully shuts down the Kafka writer.

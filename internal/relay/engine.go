@@ -23,29 +23,31 @@ const (
 
 // Engine coordinates the movement of events from Storage to Publisher.
 type Engine struct {
-	relayId       string
-	storage       Storage
-	publisher     Publisher
-	interval      time.Duration
-	leaseTimeout  time.Duration
-	reapBatchSize int
-	batchSize     int
-	policy        RetryPolicy
-	logger        *zap.Logger
-	metrics       *telemetry.Metrics
-	tracer        trace.Tracer
-	meter         metric.Meter
-	events        []Event
+	relayId            string
+	storage            Storage
+	publisher          Publisher
+	interval           time.Duration
+	leaseTimeout       time.Duration
+	reapBatchSize      int
+	batchSize          int
+	enableBatchPublish bool
+	policy             RetryPolicy
+	logger             *zap.Logger
+	metrics            *telemetry.Metrics
+	tracer             trace.Tracer
+	meter              metric.Meter
+	events             []Event
 }
 
 // EngineParams handles the tuning and identity.
 type EngineParams struct {
-	RelayID       string
-	Interval      time.Duration
-	BatchSize     int
-	LeaseTimeout  time.Duration
-	ReapBatchSize int
-	RetryPolicy   RetryPolicy
+	RelayID            string
+	Interval           time.Duration
+	BatchSize          int
+	LeaseTimeout       time.Duration
+	ReapBatchSize      int
+	RetryPolicy        RetryPolicy
+	EnableBatchPublish bool
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
@@ -62,19 +64,20 @@ func NewEngine(
 	}
 
 	return &Engine{
-		relayId:       id,
-		storage:       storage,
-		publisher:     publisher,
-		interval:      params.Interval,
-		batchSize:     params.BatchSize,
-		leaseTimeout:  params.LeaseTimeout,
-		reapBatchSize: params.ReapBatchSize,
-		policy:        params.RetryPolicy,
-		logger:        tel.ScopedLogger("engine"),
-		metrics:       tel.Metrics,
-		tracer:        tel.Tracer,
-		meter:         tel.Meter,
-		events:        make([]Event, params.BatchSize),
+		relayId:            id,
+		storage:            storage,
+		publisher:          publisher,
+		interval:           params.Interval,
+		batchSize:          params.BatchSize,
+		leaseTimeout:       params.LeaseTimeout,
+		reapBatchSize:      params.ReapBatchSize,
+		enableBatchPublish: params.EnableBatchPublish,
+		policy:             params.RetryPolicy,
+		logger:             tel.ScopedLogger("engine"),
+		metrics:            tel.Metrics,
+		tracer:             tel.Tracer,
+		meter:              tel.Meter,
+		events:             make([]Event, params.BatchSize),
 	}
 }
 
@@ -212,41 +215,17 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	// Record number of claimed events
 	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
 
-	successEvents := make([]uuid.UUID, 0)
-	failedEvents := make([]FailedEvent, 0)
+	var successEvents []uuid.UUID
+	var failedEvents []FailedEvent
 
-	for _, event := range events {
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		default:
-		}
+	// if e.enableBatchPublish {
+	// successEvents, failedEvents, err = e.publishBatch(ctx, events)
+	// } else {
+	successEvents, failedEvents, err = e.publishOnByOne(ctx, events)
+	// }
 
-		//Publish the event
-		err := e.publisher.Publish(ctx, event)
-
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return 0, err
-			}
-
-			failedEvents = append(failedEvents, e.assessFailure(event, err))
-			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
-
-			// We return the error or continue the loop based on your retry logic
-			continue
-		}
-
-		successEvents = append(successEvents, event.ID)
-
-		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
-			metric.WithAttributes(attribute.String("type", event.Type)))
-		e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
-
-		e.logger.Debug("event published",
-			zap.String("event_id", event.ID.String()),
-			zap.String("type", event.Type),
-		)
+	if err != nil {
+		return 0, err
 	}
 
 	if len(successEvents) > 0 {
@@ -316,6 +295,86 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	}
 
 	return len(events), nil
+}
+
+func (e *Engine) publishOnByOne(
+	ctx context.Context,
+	events []Event,
+) ([]uuid.UUID, []FailedEvent, error) {
+
+	successEvents := make([]uuid.UUID, 0, len(events))
+	failedEvents := make([]FailedEvent, 0, len(events))
+
+	for _, event := range events {
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		default:
+		}
+
+		err := e.publisher.Publish(ctx, event)
+
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, nil, err
+			}
+
+			failedEvents = append(failedEvents, e.assessFailure(event, err))
+			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
+
+			// We return the error or continue the loop based on your retry logic
+			continue
+		}
+
+		successEvents = append(successEvents, event.ID)
+
+		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
+			metric.WithAttributes(attribute.String("type", event.Type)))
+		e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
+
+		e.logger.Debug("event published",
+			zap.String("event_id", event.ID.String()),
+			zap.String("type", event.Type),
+		)
+	}
+
+	return successEvents, failedEvents, nil
+}
+
+func (e *Engine) publishBatch(
+	ctx context.Context,
+	events []Event,
+) ([]uuid.UUID, []FailedEvent, error) {
+
+	// err := e.publisher.PublishBatch(ctx, events)
+	err := fmt.Errorf("Batch publishing is not enabled yet")
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, nil, err
+		}
+
+		failures := make([]FailedEvent, 0, len(events))
+		for _, ev := range events {
+			failures = append(failures, e.assessFailure(ev, err))
+		}
+
+		e.metrics.EventsTotal.Add(ctx, int64(len(events)),
+			metric.WithAttributes(attribute.String("status", "failed")))
+
+		return nil, failures, nil
+	}
+
+	successIDs := make([]uuid.UUID, 0, len(events))
+	for _, ev := range events {
+		successIDs = append(successIDs, ev.ID)
+		e.metrics.EndToEndLatency.Record(ctx, time.Since(ev.CreatedAt).Seconds(),
+			metric.WithAttributes(attribute.String("type", ev.Type)))
+	}
+
+	e.metrics.EventsTotal.Add(ctx, int64(len(events)),
+		metric.WithAttributes(attribute.String("status", "success")))
+
+	return successIDs, nil, nil
 }
 
 func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
