@@ -1,30 +1,47 @@
-# --- Configuration ---
-BINARY_NAME    := openoutbox-relay
-COMPOSE_FILE   := deployments/docker-compose.yaml
-MAIN_PACKAGE   := ./cmd/relay/main.go
-PRODUCER_PKG   := ./cmd/producer/main.go
+# --- Load environment variables from .env if it exists ---
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
 
-.PHONY: all build run producer test clean fmt lint up down setup docs help
+# --- Configuration & Defaults ---
+BINARY_NAME         := openoutbox-relay
+COMPOSE_FILE        := deployments/docker-compose.yaml
+MAIN_PACKAGE        := ./cmd/relay/main.go
+PRODUCER_PKG        := ./cmd/producer/main.go
+OTEL_ENDPOINT       := localhost:4317
 
+# Map LOCAL_ env vars to internal Make variables for cleaner targets
+TOPIC_NAME          := $(LOCAL_TEST_TOPIC)
+NATS_STREAM         := $(LOCAL_NATS_STREAM)
+OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
+
+# The wildcard subject used specifically for NATS JetStream
+NATS_SUBJECT        := $(TOPIC_NAME).>
+
+.PHONY: all build run producer test clean fmt lint up down setup docs help ps logs
+
+# Default target: Run the full development pipeline
 all: setup fmt lint build
 
 # ==========================================
 # Development & Execution
 # ==========================================
 
-# Run the Relay (Uses your local .env file automatically via your Go code)
+# Run the Relay service locally using Go
 run:
 	go run $(MAIN_PACKAGE)
 
-# Run the Producer to generate traffic
+# Run the Producer to generate dummy events for testing
 producer:
 	go run $(PRODUCER_PKG)
 
-# Build the local binary
+# Compile the Relay into a binary in the bin/ directory
 build:
+	mkdir -p bin
 	go build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
 
-# Clean build artifacts
+# Remove build binaries and clear Go test cache
 clean:
 	rm -rf bin/
 	go clean -testcache
@@ -33,54 +50,49 @@ clean:
 # Quality & Linting
 # ==========================================
 
-# Format code, fix imports, and shorten long lines (100 chars)
+# Format code, organize imports, and enforce 100-char line limits
 fmt:
 	goimports -w .
 	golines . -w --max-len=100
 	go mod tidy
 
-# Run all linters (Runs fmt first to ensure clean diffs)
+# Run golangci-lint to catch code quality issues
 lint: fmt
 	golangci-lint run ./...
 
-# Run all tests with race detection
+# Run all project tests with the race detector enabled
 test:
 	go test -v -race ./...
-
-# Open documentation in your browser
-docs:
-	@echo "Opening pkgsite..."
-	pkgsite -open .
 
 # ==========================================
 # Infrastructure (Docker)
 # ==========================================
 
-# Start all infrastructure
+# Spin up all infrastructure (Postgres, Kafka, NATS, OTel)
 up:
 	docker-compose -f $(COMPOSE_FILE) up -d
 
-# Start specific service: make up-kafka
+# Spin up a specific service (e.g., make up-kafka)
 up-%:
 	docker-compose -f $(COMPOSE_FILE) up -d $*
 
-# Stop and remove all containers/networks
+# Shut down all infrastructure and remove networks
 down:
 	docker-compose -f $(COMPOSE_FILE) down
 
-# Stop specific service: make down-postgres
+# Stop a specific service (e.g., make down-postgres)
 down-%:
 	docker-compose -f $(COMPOSE_FILE) stop $*
 
-# Logs for all service: make logs
+# Follow logs for all running containers
 logs:
 	docker-compose -f $(COMPOSE_FILE) logs -f
 
-# Logs for specific service: make logs-relay
+# Follow logs for a specific service (e.g., make logs-relay)
 logs-%:
 	docker-compose -f $(COMPOSE_FILE) logs -f $*
 
-# Check infrastructure status
+# Show status of all project containers
 ps:
 	docker-compose -f $(COMPOSE_FILE) ps
 
@@ -88,12 +100,58 @@ ps:
 # Tooling Setup
 # ==========================================
 
-# Install all required development tools
+# Install required local development tools and git hooks
 setup:
-	@echo "Installing Go tools..."
+	@echo "Installing tools and setting up pre-commit..."
 	brew install pre-commit || pip install pre-commit
 	pre-commit install
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/segmentio/golines@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@echo "Done. Make sure \$$GOPATH/bin is in your \$$PATH."
+
+# ==========================================
+# NATS Management
+# ==========================================
+
+# Create the JetStream stream and bind the subject pattern
+nats-setup:
+	@chmod +x scripts/nats/setup-stream.sh
+	./scripts/nats/setup-stream.sh nats:4222 $(NATS_STREAM) "$(NATS_SUBJECT)"
+
+# View a historical list of messages currently in the JetStream
+nats-view:
+	docker-compose -f $(COMPOSE_FILE) exec nats-box \
+		nats -s nats:4222 stream view $(NATS_STREAM)
+
+# Show detailed metadata, sequence numbers, and consumer counts for the stream
+nats-info:
+	docker-compose -f $(COMPOSE_FILE) exec nats-box \
+		nats -s nats:4222 stream info $(NATS_STREAM)
+
+# ==========================================
+# Kafka Management
+# ==========================================
+
+# Create the required Kafka topics with 3 partitions
+kafka-setup:
+	@chmod +x scripts/kafka/setup-topics.sh
+	./scripts/kafka/setup-topics.sh $(PUBLISHER_URL) $(TOPIC_NAME) 3
+
+# List all existing topics in the Kafka cluster
+kafka-list:
+	docker-compose -f $(COMPOSE_FILE) exec kafka \
+		/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(PUBLISHER_URL)
+
+# Tail messages from the beginning of the topic in real-time
+kafka-tail:
+	docker-compose -f $(COMPOSE_FILE) exec kafka \
+		/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(PUBLISHER_URL) --topic $(TOPIC_NAME) --from-beginning
+
+# ==========================================
+# Observability
+# ==========================================
+
+# Send a batch of test traces to the OTel Collector to verify the pipeline
+test-otel:
+	@chmod +x scripts/otel/test-telemetry.sh
+	./scripts/otel/test-telemetry.sh $(OTEL_ENDPOINT) $(OTEL_TRACE_COUNT)

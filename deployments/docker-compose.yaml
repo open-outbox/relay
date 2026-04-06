@@ -1,5 +1,7 @@
 ---
 
+name: openoutbox
+
 volumes:
   pg_data: {}
   redis_data: {}
@@ -92,20 +94,20 @@ services:
     image: prom/prometheus:v3.1.0
     container_name: prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--web.enable-otlp-receiver' # To enable OTel ingestion
 
     ports:
       - "9090:9090"
     volumes:
-      - ../configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../configs/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml
 
   otel-collector:
     image: otel/opentelemetry-collector:0.149.0
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ../configs/otel/otel-collector-config.yml:/etc/otel-collector-config.yaml
+      - ../configs/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
       - 8889:8889 # Prometheus exporter metrics
       - 4317:4317 # OTLP gRPC receiver
