@@ -67,11 +67,10 @@ The Relay includes a built-in CLI for maintenance, cleanup, and manual intervent
 To keep the outbox table performant, you can periodically prune successfully delivered or exhausted (dead) events.
 
 ```bash
-
 relay-cli prune --delivered-age 7d --dead-age 30d --dry-run
 
-
 relay-cli prune --delivered-age 7d --dead-age 30d
+```
 
 ## ⚙️ Configuration
 
