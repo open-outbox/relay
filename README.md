@@ -44,7 +44,7 @@ docker run -d \
 Or with `docker-compose`:
 
 ```yaml
-version: '3'
+---
 
 services:
   relay:
