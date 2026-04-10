@@ -2,26 +2,32 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/gommon/log"
 	"github.com/open-outbox/relay/internal/relay"
+	"go.uber.org/zap"
 )
 
 // Postgres is a PostgreSQL-backed implementation of the relay.Storage interface.
 // It uses the jackc/pgx/v5 library for efficient connection pooling and
 // PostgreSQL-specific optimizations.
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	logger *zap.Logger
 }
 
 // NewPostgres creates a new Postgres storage instance using the provided pgx connection pool.
-func NewPostgres(pool *pgxpool.Pool) *Postgres {
-	return &Postgres{pool: pool}
+func NewPostgres(pool *pgxpool.Pool, logger *zap.Logger) *Postgres {
+	return &Postgres{pool: pool, logger: logger}
 }
 
 // ClaimBatch atomically selects and locks a batch of pending events for the current relay instance.
@@ -38,25 +44,25 @@ func (p *Postgres) ClaimBatch(
 ) ([]relay.Event, error) {
 	query := `
         WITH target_events AS (
-            SELECT event_id 
+            SELECT event_id
             FROM outbox_events
-            WHERE 
+            WHERE
                 -- Standard pickup: status pending and available
                 status = $1 AND available_at <= NOW()
             ORDER BY available_at ASC, created_at ASC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
-        ) 
+        )
         UPDATE outbox_events as e
-        SET 
+        SET
             status = $3,
-            locked_by = $4,  
+            locked_by = $4,
             locked_at = NOW(),
             updated_at = NOW()
         FROM target_events as t
         WHERE e.event_id = t.event_id
-        RETURNING 
-            e.event_id, 
+        RETURNING
+            e.event_id,
             e.event_type,
 			e.partition_key,
             e.payload,
@@ -114,13 +120,13 @@ func (p *Postgres) MarkDeliveredBatch(
 
 	query := `
         UPDATE outbox_events
-        SET 
+        SET
             status = $1,
 			delivered_at = NOW(),
             locked_by = NULL,
             locked_at = NULL,
             updated_at = NOW()
-        WHERE 
+        WHERE
 			event_id = ANY($2)
           	AND status = $3
           	AND locked_by = $4
@@ -171,7 +177,7 @@ func (p *Postgres) MarkFailedBatch(
 
 	query := `
         UPDATE outbox_events AS e
-        SET 
+        SET
             status       = v.status,
             available_at = v.avail,
             attempts     = v.att,
@@ -227,11 +233,11 @@ func (p *Postgres) ReapExpiredLeases(
 ) (int64, error) {
 	query := `
         WITH stuck_events AS (
-            SELECT event_id 
+            SELECT event_id
             FROM outbox_events
             WHERE status = 'DELIVERING'
 				AND (
-					locked_at < (now() - $1::interval) 
+					locked_at < (now() - $1::interval)
 					OR locked_at IS NULL
 				)
             ORDER BY locked_at ASC
@@ -262,7 +268,7 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	query := `
         SELECT
             COALESCE((SELECT count(*) FROM outbox_events WHERE status='PENDING'), 0)::bigint,
-            COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at) 
+            COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at)
 				FROM outbox_events WHERE status='PENDING'))), 0)::bigint
 	`
 
@@ -274,8 +280,109 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	return stats, err
 }
 
+// Prune removes historical event data from the outbox based on the provided age thresholds.
+//
+// It handles two types of cleanup:
+//  1. DELIVERED: Successfully processed events that are no longer needed for auditing.
+//  2. DEAD: Events that failed all retry attempts and have been quarantined.
+//
+// If opts.DryRun is true, it performs a non-destructive count of the records
+// that meet the criteria. Otherwise, it executes the deletions within a transaction
+// to ensure consistency and returns the total number of rows removed.
+func (p *Postgres) Prune(ctx context.Context, opts relay.PruneOptions) (relay.PruneResult, error) {
+
+	if err := validateInterval(opts.DeliveredAge); err != nil {
+		return relay.PruneResult{}, fmt.Errorf("delivered_age validation: %w", err)
+	}
+	if err := validateInterval(opts.DeadAge); err != nil {
+		return relay.PruneResult{}, fmt.Errorf("dead_age validation: %w", err)
+	}
+
+	deliveredInterval := formatInterval(opts.DeliveredAge)
+	deadInterval := formatInterval(opts.DeadAge)
+
+	if opts.DryRun {
+		return p.countPotentialDeletes(ctx, deliveredInterval, deadInterval)
+	}
+
+	return p.executePrune(ctx, deliveredInterval, deadInterval)
+}
+
 // Close gracefully shuts down the underlying pgx connection pool.
 func (p *Postgres) Close() error { p.pool.Close(); return nil }
+
+func (p *Postgres) countPotentialDeletes(
+	ctx context.Context,
+	deliveredInterval, deadInterval string,
+) (relay.PruneResult, error) {
+	var res relay.PruneResult
+	query := `
+		SELECT
+			COUNT(*) FILTER (
+				WHERE $1::text IS NOT NULL
+				AND status = 'DELIVERED'
+				AND delivered_at < NOW() - $1::interval
+			),
+			COUNT(*) FILTER (
+				WHERE $2::text IS NOT NULL
+				AND status = 'DEAD'
+				AND updated_at < NOW() - $2::interval
+			)
+		FROM outbox_events;
+	`
+	var dInv, fInv interface{}
+	if deliveredInterval != "" {
+		dInv = deliveredInterval
+	}
+	if deadInterval != "" {
+		fInv = deadInterval
+	}
+
+	err := p.pool.QueryRow(ctx, query, dInv, fInv).Scan(
+		&res.DeliveredDeleted,
+		&res.DeadDeleted,
+	)
+
+	return res, err
+}
+
+func (p *Postgres) executePrune(
+	ctx context.Context,
+	deliveredInterval, deadInterval string,
+) (relay.PruneResult, error) {
+	var res relay.PruneResult
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return res, err
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+			if !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+				p.logger.Warn("failed to rollback transaction", zap.Error(rollbackErr))
+			}
+		}
+	}()
+
+	if deliveredInterval != "" {
+		q := `DELETE FROM outbox_events WHERE status = $1 AND delivered_at < NOW() - $2::interval`
+		tag, err := tx.Exec(ctx, q, relay.StatusDelivered, deliveredInterval)
+		if err != nil {
+			return res, fmt.Errorf("failed to prune delivered: %w", err)
+		}
+		res.DeliveredDeleted = tag.RowsAffected()
+	}
+
+	if deadInterval != "" {
+		q := `DELETE FROM outbox_events WHERE status = $1 AND updated_at < NOW() - $2::interval`
+		tag, err := tx.Exec(ctx, q, relay.StatusDead, deadInterval)
+		if err != nil {
+			return res, fmt.Errorf("failed to prune dead: %w", err)
+		}
+		res.DeadDeleted = tag.RowsAffected()
+	}
+
+	return res, tx.Commit(ctx)
+}
 
 func durationToInterval(d time.Duration) string {
 	ms := d.Milliseconds()
@@ -284,4 +391,33 @@ func durationToInterval(d time.Duration) string {
 
 func fmtIntervalMillis(ms int64) string {
 	return strconv.FormatInt(ms, 10) + " milliseconds"
+}
+
+func formatInterval(age string) string {
+	age = strings.ToLower(strings.TrimSpace(age))
+	if age == "" || age == "0" {
+		return ""
+	}
+	if strings.HasSuffix(age, "d") {
+		return strings.Replace(age, "d", " days", 1)
+	}
+	if strings.HasSuffix(age, "h") {
+		return strings.Replace(age, "h", " hours", 1)
+	}
+	if strings.HasSuffix(age, "m") {
+		return strings.Replace(age, "m", " minutes", 1)
+	}
+	return age + " hours"
+}
+
+var intervalRegex = regexp.MustCompile(`^\d+[dhm]$`)
+
+func validateInterval(age string) error {
+	if age == "" || age == "0" {
+		return nil
+	}
+	if !intervalRegex.MatchString(age) {
+		return fmt.Errorf("invalid retention format '%s': must match [number][d|h|m]", age)
+	}
+	return nil
 }

@@ -66,7 +66,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			}
 		},
 		// Storage provider: selects and initializes the DB driver based on configuration.
-		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
+		func(ctx context.Context, cfg *config.Config, logger *zap.Logger) (relay.Storage, error) {
 
 			switch cfg.StorageType {
 			case "postgres":
@@ -74,7 +74,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				if err != nil {
 					return nil, err
 				}
-				return storage.NewPostgres(pool), nil
+				return storage.NewPostgres(pool, logger), nil
 
 			case "mysql":
 				// return storage.NewMySQL(cfg.DatabaseURL), nil (To be implemented)

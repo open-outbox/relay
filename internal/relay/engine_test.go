@@ -48,17 +48,25 @@ func (m *MockStorage) MarkFailedBatch(
 	return args.Error(0)
 }
 
-func (m *MockStorage) GetStats(_ context.Context) (Stats, error) {
-	args := m.Called()
+func (m *MockStorage) GetStats(ctx context.Context) (Stats, error) {
+	args := m.Called(ctx)
 	return args.Get(0).(Stats), args.Error(1)
 }
 
+func (m *MockStorage) Prune(
+	ctx context.Context,
+	opts PruneOptions,
+) (PruneResult, error) {
+	args := m.Called(ctx, opts)
+	return args.Get(0).(PruneResult), args.Error(1)
+}
+
 func (m *MockStorage) ReapExpiredLeases(
-	_ context.Context,
-	_ time.Duration,
-	_ int,
+	ctx context.Context,
+	leaseTimeout time.Duration,
+	limit int,
 ) (int64, error) {
-	args := m.Called()
+	args := m.Called(ctx, leaseTimeout, limit)
 	return args.Get(0).(int64), args.Error(1)
 }
 
