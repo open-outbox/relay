@@ -31,6 +31,7 @@ The Relay requires an `outbox_events` table. Run the standard DDL found in:
 [`schema/postgres/openoutbox.sql`](./schema/postgres/openoutbox.sql)
 
 ### 2. Run with Docker
+
 ```bash
 docker run -d \
   --name openoutbox-relay \
@@ -56,6 +57,21 @@ services:
       - KAFKA_BROKERS=kafka:9092
     restart: always
 ```
+
+## Operational Commands
+
+The Relay includes a built-in CLI for maintenance, cleanup, and manual intervention.
+
+### Pruning Historical Data
+
+To keep the outbox table performant, you can periodically prune successfully delivered or exhausted (dead) events.
+
+```bash
+
+relay-cli prune --delivered-age 7d --dead-age 30d --dry-run
+
+
+relay-cli prune --delivered-age 7d --dead-age 30d
 
 ## ⚙️ Configuration
 
