@@ -1,6 +1,9 @@
 # --- Stage 1: Build ---
 # Using the official Go image (which is Debian-based)
-FROM golang:1.26.1-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.1-bookworm AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install CA certificates for secure connections (NATS/Postgres TLS)
 RUN apt-get update && apt-get install -y ca-certificates --no-install-recommends
@@ -17,8 +20,8 @@ COPY . .
 # 3. Build the binary
 # We still use CGO_ENABLED=0 for maximum portability,
 # but it will link perfectly against Debian's libraries if needed.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o cli ./cmd/cli
+RUN CGO_ENABLED=0 $TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
+RUN CGO_ENABLED=0 $TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o cli ./cmd/cli
 
 # --- Stage 2: Final Runtime ---
 # Using Debian Slim for the production environment
