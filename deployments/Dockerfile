@@ -17,7 +17,8 @@ COPY . .
 # 3. Build the binary
 # We still use CGO_ENABLED=0 for maximum portability,
 # but it will link perfectly against Debian's libraries if needed.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o openoutbox-relay ./cmd/relay/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o cli ./cmd/cli
 
 # --- Stage 2: Final Runtime ---
 # Using Debian Slim for the production environment
@@ -31,7 +32,8 @@ RUN apt-get update && \
 WORKDIR /root/
 
 # Copy the binary from the builder
-COPY --from=builder /app/openoutbox-relay .
+COPY --from=builder /app/relay .
+COPY --from=builder /app/cli .
 
 # Expose the Health/Metrics API port
 EXPOSE 8080
@@ -41,4 +43,4 @@ EXPOSE 8080
 RUN useradd -ms /bin/bash openoutbox
 USER openoutbox
 
-CMD ["./openoutbox-relay"]
+CMD ["./relay"]

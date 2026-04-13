@@ -72,6 +72,12 @@ relay-cli prune --delivered-age 7d --dead-age 30d --dry-run
 relay-cli prune --delivered-age 7d --dead-age 30d
 ```
 
+Using docker:
+
+```bash
+docker run --rm openoutbox/relay:latest ./cli prune --delivered-age 7d --dead-age 30d
+```
+
 ## 🛡️ Reliability Guarantees
 
 The Relay is designed for **At-Least-Once Delivery**.

@@ -5,9 +5,11 @@ ifneq (,$(wildcard ./.env))
 endif
 
 # --- Configuration & Defaults ---
-BINARY_NAME         := openoutbox-relay
+BINARY_NAME         := relay
+CLI_BINARY_NAME		:= cli
 COMPOSE_FILE        := deployments/infra-docker-compose.yaml
 MAIN_PACKAGE        := ./cmd/relay/main.go
+CLI_PACKAGE         := ./cmd/cli
 PRODUCER_PKG        := ./cmd/producer/main.go
 KAFKA_URL           := kafka:9092
 NATS_URL            := nats:4222
@@ -38,6 +40,7 @@ produce: ## Run the Producer to generate dummy events for testing
 build: ## Compile the Relay into a binary in the bin/ directory
 	mkdir -p bin
 	go build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
+	go build -o bin/$(CLI_BINARY_NAME) $(CLI_PACKAGE)
 
 clean: ## Remove build binaries and clear Go test cache
 	rm -rf bin/
