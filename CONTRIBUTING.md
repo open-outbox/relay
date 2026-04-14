@@ -145,7 +145,7 @@ In order to use Kafka as the publisher:
 
 To control the producer, or the publishers you can use these
 environment variables. For the full list of environment variables and their usage refer
-to the [Configuration section of the README.md](./README.md)
+to the Configuration section of the [README.md](./README.md)
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
