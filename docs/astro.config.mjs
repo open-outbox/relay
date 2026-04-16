@@ -49,6 +49,13 @@ export default defineConfig({
                     collapsed: true,
                     autogenerate: { directory: 'spec' },
                 },
+                {
+                    label: 'Community',
+                    items: [
+                        {label: 'Contribute', link: 'contribute'},
+                        {label: 'Discord', link: 'https://discord.gg/Tk3jwfm7'},
+                    ]
+                }
             ],
         }),
     ],
