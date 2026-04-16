@@ -203,7 +203,8 @@ These commands help with local development and testing.
 | `make build` | Compile the Relay and CLI into binaries in the `./bin` directory. |
 | `make clean` | Remove build binaries and clear Go test cache. |
 | `make docker-build` | Builds the production-ready OCI container image. |
-| `make docs-dev` | Runs the documentation in develoopment mode. |
+| `make gen-api` | Generates the API documentation in the docs directory, to be tested by `make docs-dev`. |
+| `make docs-dev` | Runs the documentation in develoopment mode. Should run after `make gen-api`. |
 
 ### Tooling Setup
 

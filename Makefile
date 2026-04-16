@@ -58,6 +58,7 @@ gen-api:
   		--template-file package=docs/starlight-package.gotxt \
   		--output 'docs/src/content/docs/reference/api/{{.ImportPath}}.md' \
   		./...
+	find docs/src/content/docs/reference/api -name "*.md" -exec sh -c 'mv "$$1" "$${1%.md}.mdx"' _ {} \;
 
 
 # ==========================================

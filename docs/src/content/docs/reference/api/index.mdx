@@ -4,19 +4,40 @@ description: Technical documentation for the Open Outbox Relay packages.
 ---
 
 import { FileTree } from '@astrojs/starlight/components';
-
+import { Card, CardGrid } from '@astrojs/starlight/components';
 
 To understand how the Relay works under the hood, you can explore the documentation for each package. The project is organized into modular components:
 
 <FileTree>
-- pkg/
-  - **publisher/**: Interface and implementations for Kafka, NATS, etc.
-  - **cursor/**: Logic for tracking database position and claiming events.
+- cmd/
+  - [**cli**](/reference/api/cmd/cli): Command-line tools for managing the outbox.
+  - [**producer**](/reference/api/cmd/producer): Example event producer.
+  - [**relay**](/reference/api/cmd/relay): The main service entry point.
 - internal/
-  - **engine/**: The core orchestration loop.
-  - **metrics/**: OpenTelemetry and Prometheus integration.
-- main.go: The entry point of the application.
+  - [**config**](/reference/api/internal/config): Environment and app configuration.
+  - [**container**](/reference/api/internal/container): Dependency injection and lifecycle.
+  - [**publishers**](/reference/api/internal/publishers): Kafka and NATS implementations.
+  - [**relay**](/reference/api/internal/relay): Core orchestration and worker loops.
+  - [**storage**](/reference/api/internal/storage): Database drivers and event claiming.
+  - [**telemetry**](/reference/api/internal/telemetry): Metrics and OpenTelemetry tracing.
 </FileTree>
 
-### Package Documentation
-Select a package from the sidebar to view its detailed GoDoc reference, including function signatures, types, and examples.
+### Key Entry Points
+
+<CardGrid>
+  <Card title="Event Delivery" icon="rocket">
+    Explore [**internal/publishers**](/reference/api/internal/publishers) to understand how the Relay handles delivery across different brokers.
+  </Card>
+
+  <Card title="High-Concurrency Claiming" icon="magnifier">
+    Dive into [**internal/storage**](/reference/api/internal/storage) to see the PostgreSQL query logic that powers worker synchronization.
+  </Card>
+
+  <Card title="Core Orchestration" icon="setting">
+    Visit [**internal/relay**](/reference/api/internal/relay) to understand the main worker loop, backoff strategies, and state machines.
+  </Card>
+
+  <Card title="System Observability" icon="random">
+    Review [**internal/telemetry**](/reference/api/internal/telemetry) to see how we track health, metrics, and distributed tracing.
+  </Card>
+</CardGrid>
