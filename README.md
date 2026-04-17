@@ -37,7 +37,7 @@ docker run -d \
   --name openoutbox-relay \
   -e STORAGE_URL="postgres://user:pass@localhost:5432/db" \
   -e PUBLISHER_TYPE="kafka" \
-  -e KAFKA_BROKERS="localhost:9092" \
+  -e PUBLISHER_URL="localhost:9092" \
   openoutbox/relay:latest
 ```
 
@@ -54,8 +54,31 @@ services:
       - STORAGE_TYPE=postgres
       - STORAGE_URL=postgres://postgres:postgres@db:5432/postgres
       - PUBLISHER_TYPE=kafka
-      - KAFKA_BROKERS=kafka:9092
+      - PUBLISHER_URL=kafka:9092
     restart: always
+```
+
+### Try it Out (Live Environment)
+
+A pre-configured environment is provided in the [`/examples/demo`](./examples/demo)
+directory. This allows you to see the Relay in action without any manual setup.
+
+To start the infrastructure (Postgres, NATS, and the Relay):
+
+```bash
+cd examples/demo
+docker compose up -d
+```
+
+**Simulate an Event**
+Once the services are up, you can simulate a business event by inserting a
+record directly into the Postgres "outbox" table. The Relay will detect
+it and deliver it to NATS instantly.
+
+```bash
+docker compose exec postgres psql -U postgres -d postgres -c \
+"INSERT INTO outbox_events (event_id, event_type, payload, partition_key)
+VALUES (gen_random_uuid(), 'outbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
 ```
 
 ## Operational Commands
@@ -64,26 +87,58 @@ The Relay includes a built-in CLI for maintenance, cleanup, and manual intervent
 
 ### Pruning Historical Data
 
-To keep the outbox table performant, you can periodically prune successfully delivered or exhausted (dead) events.
+To keep the outbox table performant, you should periodically prune successfully delivered
+or exhausted (dead) events.
 
-The maintenance scripts require two specific indices to ensure high
-performance. Please execute the standard DDL located in:
-[schema/postgres/maintenance.sql](./schema/postgres/maintenance.sql) to create these indices.
+> **Performance Note:** Pruning requires specific indices to handle high-volume tables.
+Before running your first prune, ensure you have executed the standard DDL
+located in: [`schema/postgres/maintenance.sql`](./schema/postgres/maintenance.sql).
+
+---
+
+#### Using Docker Compose (Recommended)
+
+If you are using the example [`docker-compose.yml`](./examples/demo/docker-compose.yml),
+run the maintenance command via the `cli` service. This ensures the CLI uses the same
+network and credentials as the Relay.
+
+**Dry Run (Simulation)**:
 
 ```bash
-cli prune --delivered-age 7d --dead-age 30d --dry-run
-
-cli prune --delivered-age 7d --dead-age 30d
+docker compose run --rm cli prune --delivered-age 7d --dead-age 30d --dry-run
 ```
 
-Using docker:
+**Execute Pruning**:
+
+```Bash
+docker compose run --rm cli prune --delivered-age 7d --dead-age 30d
+```
+
+#### Using Pure Docker
+
+If you prefer to run the container without Compose, you must specify the
+CLI binary path and your database connection string as an environment variable.
 
 ```bash
-docker run --rm openoutbox/relay:latest\
- ./cli prune \
- --delivered-age 7d --dead-age 30d \
- --storage-url postgres://postgres:postgres@db:5432/postgres
+docker run --rm \
+  --network open-outbox-network \
+  -e STORAGE_URL="postgres://postgres:postgres@postgres:5432/postgres" \
+  --entrypoint "/app/cli"
+  openoutbox/relay:latest \
+  prune --delivered-age 7d --dead-age 30d
 ```
+
+#### Automation via Cron
+
+To automate maintenance, add an entry to your crontab. Using the -T flag is essential
+for non-interactive environments.
+
+```bash
+# Run daily at 2:00 AM
+0 2 * * * cd /path/to/project && docker compose run --rm -T cli prune --delivered-age 7d --dead-age 30d
+```
+
+---
 
 ## 🛡️ Reliability Guarantees
 
