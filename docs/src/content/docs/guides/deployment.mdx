@@ -1,0 +1,72 @@
+---
+title: Deployment Guide
+description: Technical requirements and strategies for running OpenOutbox Relay in production.
+---
+
+import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
+
+This guide outlines the infrastructure requirements and hardening steps necessary to move OpenOutbox Relay from a local demo to a production environment.
+
+## Infrastructure Checklist
+
+Before deploying, ensure your environment meets the following minimum requirements:
+
+* **Database:** PostgreSQL 12+ (Requires `pgcrypto` or `uuid-ossp` for UUID generation).
+* **Message Broker:** Kafka 3.0+, NATS JetStream, or Redis 7.0+.
+* **Network:** The Relay requires outbound access to the database and broker ports. No inbound ports are required unless you enable the health-check server.
+
+---
+
+## 1. Database Preparation
+
+The Relay is designed to be "migration-agnostic." It does not automatically modify your production schema. You must apply the schema manually.
+
+<Steps>
+1.  **Apply Schema:** Execute the [OpenOutbox Core DDL](https://github.com/open-outbox/relay/blob/main/schema/postgres/open-outbox.sql) in your database.
+2.  **Verify Permissions:** Ensure the database user assigned to the Relay has `SELECT`, `UPDATE`, `DELETE`, and `INSERT` permissions on the `openoutbox_events` table.
+3.  **Indexes:** For high-volume tables, verify that the `available_at` and `status` columns are properly indexed as specified in the DDL.
+</Steps>
+
+<Aside type="caution" title="Storage Namespacing">
+If you rename the outbox table, ensure you update the `STORAGE_TABLE_NAME` environment variable accordingly.
+</Aside>
+
+---
+
+## 2. Deployment Patterns
+
+OpenOutbox Relay is a stateless Go binary, making it highly flexible for different architectures.
+
+### Sidecar Pattern
+Run the Relay in the same Pod (Kubernetes) or Task (AWS ECS) as your application.
+* **Best for:** Ultra-low latency and simplified networking.
+* **Scaling:** Scales 1:1 with your application instances.
+
+### Standalone Cluster
+Run a dedicated cluster of Relays as a central platform service.
+* **Best for:** Multi-tenant setups where one Relay cluster handles events from multiple databases.
+* **Scaling:** Independent scaling based on global event lag.
+
+---
+
+## 3. Production Hardening
+
+When moving to production, default settings should be reviewed for reliability and performance.
+
+### Essential Environment Variables
+
+| Variable | Recommendation | Purpose |
+| :--- | :--- | :--- |
+| `RELAY_ID` | `$(HOSTNAME)` | **Must be unique** per instance to prevent lease collisions. |
+| `ENVIRONMENT` | `production` | Enables structured JSON logging and production-level telemetry. |
+| `BATCH_SIZE` | `500` - `2000` | Tune this based on your database IOPS and network throughput. |
+| `POLL_INTERVAL` | `100ms` | Balance between "near real-time" and database CPU usage. |
+
+### Observability
+We strongly recommend enabling **OpenTelemetry** to monitor your delivery health.
+
+```bash
+# Example OTLP configuration
+OTEL_EXPORTER_OTLP_ENDPOINT="http://otel-collector:4317"
+OTEL_TRACES_EXPORTER="otlp"
+OTEL_METRICS_EXPORTER="otlp"

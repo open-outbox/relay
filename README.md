@@ -6,7 +6,7 @@ It is a high-performance daemon designed for the **Transactional Outbox Pattern*
 
 ---
 
-## ✨ Features
+## Features
 
 * **Guaranteed Delivery:** `at-least-once` semantics ensure events are never lost, even during broker outages or relay crashes.
 * **Database-Native Scaling:** Leverages database-native locking (like Postgres `SKIP LOCKED`) where available to support horizontal scaling without double-processing.
@@ -15,7 +15,7 @@ It is a high-performance daemon designed for the **Transactional Outbox Pattern*
 * **Observability:** Native **OpenTelemetry** integration for distributed tracing and Prometheus metrics.
 * **Provider Agnostic:** Pluggable storage (Postgres) and publishers (Kafka, NATS JetStream, Redis).
 
-## 📊 Performance at Scale
+## Performance at Scale
 
 * **Non-Blocking I/O:** Written in Go with a focus on zero-allocation paths in the event loop.
 * **Drain Mode:** Automatically shifts from interval-based polling to high-speed "drain mode" during traffic bursts.
@@ -23,57 +23,23 @@ It is a high-performance daemon designed for the **Transactional Outbox Pattern*
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. Database Schema
+Get the Relay up and running locally in under a minute using our pre-configured demo environment.
 
-The Relay requires an `openoutbox_events` table. Run the standard DDL found in:
-[`schema/postgres/open-outbox.sql`](./schema/postgres/open-outbox.sql)
+### 1. Launch the Environment
 
-### 2. Run with Docker
-
-```bash
-docker run -d \
-  --name openoutbox-relay \
-  -e STORAGE_URL="postgres://user:pass@localhost:5432/db" \
-  -e PUBLISHER_TYPE="kafka" \
-  -e PUBLISHER_URL="localhost:9092" \
-  openoutbox/relay:latest
-```
-
-Or with `docker-compose`:
-
-```yaml
----
-
-services:
-  relay:
-    image: openoutbox/relay:latest
-    container_name: openoutbox-relay
-    environment:
-      - STORAGE_TYPE=postgres
-      - STORAGE_URL=postgres://postgres:postgres@db:5432/postgres
-      - PUBLISHER_TYPE=kafka
-      - PUBLISHER_URL=kafka:9092
-    restart: always
-```
-
-### Try it Out (Live Environment)
-
-A pre-configured environment is provided in the [`/examples/demo`](./examples/demo)
-directory. This allows you to see the Relay in action without any manual setup.
-
-To start the infrastructure (Postgres, NATS, and the Relay):
+This starts a local stack including Postgres, NATS JetStream, and the Open Outbox Relay.
 
 ```bash
-cd examples/demo
+git clone https://github.com/open-outbox/relay.git
+cd relay/examples/demo
 docker compose up -d
 ```
 
-**Simulate an Event**
-Once the services are up, you can simulate a business event by inserting a
-record directly into the Postgres "outbox" table. The Relay will detect
-it and deliver it to NATS instantly.
+### 2. Simulate an Event
+
+Insert a record directly into the Postgres outbox table. The Relay will detect the new row and deliver it to the message broker instantly.
 
 ```bash
 docker compose exec postgres psql -U postgres -d postgres -c \
@@ -81,66 +47,21 @@ docker compose exec postgres psql -U postgres -d postgres -c \
 VALUES (gen_random_uuid(), 'openoutbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
 ```
 
-## Operational Commands
+### 3. Verification
 
-The Relay includes a built-in CLI for maintenance, cleanup, and manual intervention.
+You can check the Relay logs to see the delivery confirmation:
 
-### Pruning Historical Data
+```bash
+docker compose logs relay
+```
 
-To keep the outbox table performant, you should periodically prune successfully delivered
-or exhausted (dead) events.
-
-> **Performance Note:** Pruning requires specific indices to handle high-volume tables.
-Before running your first prune, ensure you have executed the standard DDL
-located in: [`schema/postgres/maintenance.sql`](./schema/postgres/maintenance.sql).
+> 💡 **Ready for Production?**
+> For database schema requirements, production hardening checklists, and deployment strategies,
+> visit our [**Deployment Guide**](https://open-outbox.dev/guides/deployment).
 
 ---
 
-#### Using Docker Compose (Recommended)
-
-If you are using the example [`docker-compose.yml`](./examples/demo/docker-compose.yml),
-run the maintenance command via the `cli` service. This ensures the CLI uses the same
-network and credentials as the Relay.
-
-**Dry Run (Simulation)**:
-
-```bash
-docker compose run --rm cli prune --delivered-age 7d --dead-age 30d --dry-run
-```
-
-**Execute Pruning**:
-
-```Bash
-docker compose run --rm cli prune --delivered-age 7d --dead-age 30d
-```
-
-#### Using Pure Docker
-
-If you prefer to run the container without Compose, you must specify the
-CLI binary path and your database connection string as an environment variable.
-
-```bash
-docker run --rm \
-  --network open-outbox-network \
-  -e STORAGE_URL="postgres://postgres:postgres@postgres:5432/postgres" \
-  --entrypoint "/app/cli"
-  openoutbox/relay:latest \
-  prune --delivered-age 7d --dead-age 30d
-```
-
-#### Automation via Cron
-
-To automate maintenance, add an entry to your crontab. Using the -T flag is essential
-for non-interactive environments.
-
-```bash
-# Run daily at 2:00 AM
-0 2 * * * cd /path/to/project && docker compose run --rm -T cli prune --delivered-age 7d --dead-age 30d
-```
-
----
-
-## 🛡️ Reliability Guarantees
+## Reliability Guarantees
 
 The Relay is designed for **At-Least-Once Delivery**.
 
@@ -148,7 +69,7 @@ The Relay is designed for **At-Least-Once Delivery**.
 * **Idempotency:** In rare edge cases (e.g., a crash immediately after publishing but before the
 DB update), the same event may be published twice. **Consumers must be idempotent.**
 
-## ⚙️ Configuration
+## Configuration
 
 The Open Outbox Relay is designed to be cloud-native and is configured entirely via
 environment variables. These are divided into core infrastructure, engine tuning
@@ -158,7 +79,7 @@ For a complete list of variables, default values, and tuning guides, see our doc
 
 **[Read the Full Configuration Guide](https://open-outbox.dev/reference/configuration)**
 
-## 📚 Documentation & Community
+## Documentation & Community
 
 Stay connected and help us improve the Open Outbox ecosystem:
 
@@ -174,7 +95,7 @@ Open Outbox is currently in **Alpha** (`v0.1.x`). We are actively working on sca
 
 Check out our [**Project Roadmap**](./ROADMAP.md) to see what's coming next, including:
 
-* Support for MySQL datavase
+* Support for MySQL database
 * Adding new broker support
 * Dashboard for event monitoring
 * Ordering support
