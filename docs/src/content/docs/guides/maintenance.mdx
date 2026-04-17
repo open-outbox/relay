@@ -1,0 +1,65 @@
+---
+title: Maintenance & CLI
+description: How to use the OpenOutbox CLI for pruning, maintenance, and operational tasks.
+---
+
+import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
+
+To maintain peak performance, the outbox table must be periodically cleaned. The OpenOutbox Relay includes a built-in CLI designed for maintenance, cleanup, and manual intervention.
+
+## Pruning Historical Data
+
+As your system scales, successfully delivered or exhausted (dead) events should be removed to keep database indexes lean and queries fast.
+
+<Aside type="danger" title="Performance Requirement">
+Pruning high-volume tables can be resource-intensive. Before running your first prune, ensure you have applied the specialized maintenance indexes found in:
+[`schema/postgres/maintenance.sql`](https://github.com/open-outbox/relay/blob/main/schema/postgres/maintenance.sql).
+</Aside>
+
+### Pruning Strategy
+
+You can prune events based on their age and status:
+* **Delivered Events:** Successfully processed messages.
+* **Dead Events:** Messages that have exhausted all retry attempts.
+
+---
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Docker Compose">
+    If using the standard `docker-compose.yml`, run the maintenance command via the `cli` service.
+
+    **Dry Run (Simulation):**
+    ```bash
+    docker compose run --rm cli prune --delivered-age 7d --dead-age 30d --dry-run
+    ```
+
+    **Execute Pruning:**
+    ```bash
+    docker compose run --rm cli prune --delivered-age 7d --dead-age 30d
+    ```
+  </TabItem>
+  <TabItem label="Docker CLI">
+    If running without Compose, override the entrypoint to access the CLI binary.
+
+    ```bash
+    docker run --rm \
+      --network open-outbox-network \
+      -e STORAGE_URL="postgres://postgres:postgres@postgres:5432/postgres" \
+      --entrypoint "/app/cli" \
+      openoutbox/relay:latest \
+      prune --delivered-age 7d --dead-age 30d
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Automation via Cron
+
+For production environments, we recommend automating maintenance. Add an entry to your crontab (ensure you use the `-T` flag for Docker Compose in non-interactive environments).
+
+```bash
+# Run daily at 2:00 AM
+0 2 * * * cd /path/to/project && docker compose run --rm -T cli prune --delivered-age 7d --dead-age 30d
