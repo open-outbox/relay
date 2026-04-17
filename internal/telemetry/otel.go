@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 
+	"github.com/open-outbox/relay/internal/config"
 	"go.opentelemetry.io/contrib/exporters/autoexport"
 	"go.opentelemetry.io/otel"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -25,7 +27,7 @@ type OTelProviders struct {
 const serviceName = "openoutbox-relay"
 
 // NewOTelProviders bootstraps the OpenTelemetry pipeline.
-func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
+func NewOTelProviders(ctx context.Context, cfg *config.Config) (*OTelProviders, error) {
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -42,7 +44,7 @@ func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 	otel.SetTextMapPropagator(newPropagator())
 
 	// Set up Shared Resource.
-	res, err := newResource()
+	res, err := newResource(cfg)
 	if err != nil {
 		return nil, errors.Join(err, shutdown(ctx))
 	}
@@ -77,13 +79,14 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newResource() (*resource.Resource, error) {
+func newResource(cfg *config.Config) (*resource.Resource, error) {
 
 	return resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
 			"",
 			semconv.ServiceName(serviceName),
+			attribute.String("relay.id", cfg.RelayID),
 		))
 }
 

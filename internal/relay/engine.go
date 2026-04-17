@@ -348,7 +348,10 @@ func (e *Engine) publishOnByOne(
 			e.metrics.EventsTotal.Add(
 				ctx,
 				1,
-				metric.WithAttributes(attribute.String("status", "failed")),
+				metric.WithAttributes(
+					attribute.String("status", "failed"),
+					attribute.String("type", event.Type),
+				),
 			)
 
 			continue
@@ -361,7 +364,10 @@ func (e *Engine) publishOnByOne(
 		e.metrics.EventsTotal.Add(
 			ctx,
 			1,
-			metric.WithAttributes(attribute.String("status", "success")),
+			metric.WithAttributes(
+				attribute.String("status", "success"),
+				attribute.String("type", event.Type),
+			),
 		)
 
 		e.logger.Debug("event published",

@@ -19,6 +19,7 @@ type Metrics struct {
 	// EndToEndLatency measures the total time elapsed from the moment an event
 	// was created in the database until it was successfully acknowledged by
 	// the message broker.
+	// Typical attributes include 'type' (event type).
 	EndToEndLatency metric.Float64Histogram
 
 	// StorageLatency measures the duration of individual database operations.
@@ -27,6 +28,7 @@ type Metrics struct {
 
 	// PublisherLatency measures how long it takes to publish a message to the
 	// broker.
+	// Typical attributes include 'status' (success/failed) and 'type' (event type).
 	PublisherLatency metric.Float64Histogram
 
 	// PendingGauge represents the current number of events sitting in the
