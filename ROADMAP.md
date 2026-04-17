@@ -1,31 +1,32 @@
-# ROADMAP
+# Roadmap
 
-## Phase 1: Core Service
+The OpenOutbox Relay is evolving from a robust core into a high-performance, universal distribution engine for the Outbox Pattern.
 
-[X] Dependency Injection (uber-go/dig): Refactor main.go to use a container. This allows us to "swap" a NATS publisher for a Kafka one just by changing the provider function.
+## Phase 1: Foundation & Observability (Completed)
 
-[X] Structured Logging (uber-go/zap): Move away from log.Printf. We need JSON logging with fields (e.g., {"level":"info", "event_id":"...", "module":"engine"}).
+* **Dependency Injection:** Modular architecture using `uber-go/dig` for swappable publishers and storage engines.
+* **Structured Logging:** High-performance, production-ready JSON logging with `uber-go/zap`.
+* **Containerization:** Multi-stage Docker builds and `docker-compose` orchestration for rapid local development.
+* **Core Publishers:** Native support for high-throughput **Kafka** and cloud-native **NATS**.
+* **Distributed Tracing:** Full **OpenTelemetry (OTel)** integration for end-to-end visibility of event lifecycles.
 
-[X] Dockerization: Create a multi-stage Dockerfile and a production-ready docker-compose.yml.
+## Phase 2: The Multi-Engine Ecosystem (In Progress)
 
-[X] Kafka: Main publisher.
+* **MySQL Support:** Implement the `relay.Storage` interface for MySQL/MariaDB.
+* **RabbitMQ Publisher:** Support for traditional enterprise messaging via AMQP.
+* **Redis Integration:** Adding Redis (Streams/Pub-Sub) as a high-speed storage and distribution option.
+* **Webhook Relay:** Direct **HTTP/Webhook** support to trigger external APIs directly from the outbox.
+* **Enterprise Config:** Enable remote configuration providers for **Consul** and **Etcd**.
 
-[X] Nats: Second publisher
+## Phase 3: Enterprise Hardening & Scale
 
-[X] OpenTelemetry (OTEL): Add tracing support so we can see an event move from the DB through the Relay into the Broker in a single trace.
+* **Distribution:** Automated binary releases for Linux, macOS, and Windows via GitHub Actions.
+* **Orchestration:** Official **Helm Charts** and K8s manifests for production-grade deployments.
+* **Strict Ordering:** Enhanced support for strictly ordered message delivery and partitioned relaying.
+* **Security & Encryption:** Native TLS/mTLS support across all storage and publisher drivers.
+* **Throughput Optimization:** Advanced tuning for high-frequency polling and publisher batching.
+* **Advanced Observability:** Pre-built Grafana dashboards for standard OTel metrics.
 
-## Phase 2: The Multi-Store / Multi-Publisher Ecosystem
+---
 
-[ ] Enterprise configurability: fully enable the remote providers for Consul and Etcd.
-
-[ ] MySQL: Implement the relay.Storage interface for MySQL/MariaDB.
-
-[ ] RabbitMQ: For traditional enterprise messaging.
-
-[ ] Redis: Using Redis Streams or Pub/Sub.
-
-[ ] HTTP/Webhooks: To call external APIs directly from the outbox.
-
-## Phase 3: Message Ordering
-
-[ ] Message ordering: Add message ordering support and partitioned relay
+> **Note:** We are actively looking for contributors to help with Phase 2 integrations! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.

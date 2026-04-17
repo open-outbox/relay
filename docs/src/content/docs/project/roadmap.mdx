@@ -1,0 +1,62 @@
+---
+title: Roadmap
+description: The development path and future goals for the OpenOutbox Relay.
+---
+
+import { Steps, Badge } from '@astrojs/starlight/components';
+
+The OpenOutbox Relay is evolving from a robust core into a high-performance, universal distribution engine.
+Our roadmap is focused on three key pillars:
+
+- **Observability**
+- **Extensibility**
+- **Production Hardening**
+
+---
+
+## Development Phases
+
+<Steps>
+
+1.  **Phase 1: Foundation & Observability** <Badge text="Completed" variant="success" />
+
+    The core engine is production-ready with full tracing and high-performance logging.
+
+    * **Dependency Injection:** Modular architecture using `uber-go/dig`.
+    * **Structured Logging:** High-performance JSON logging with `uber-go/zap`.
+    * **Containerization:** Multi-stage Docker builds and `docker-compose` orchestration.
+    * **Core Publishers:** Native support for **Kafka** and **NATS**.
+    * **Distributed Tracing:** Full **OpenTelemetry (OTel)** integration.
+    <br/>
+
+2.  **Phase 2: The Multi-Engine Ecosystem** <Badge text="In Progress" variant="note" />
+
+    Expanding the reach of the Relay to support common enterprise stacks.
+
+    * **MySQL Support:** Implement the `relay.Storage` interface for MySQL/MariaDB.
+    * **RabbitMQ Publisher:** Support for traditional enterprise messaging via AMQP.
+    * **Redis Integration:** Adding Redis (Streams/Pub-Sub) support.
+    * **Webhook Relay:** Direct **HTTP/Webhook** support for serverless architectures.
+    * **Enterprise Config:** Remote configuration providers for **Consul** and **Etcd**.
+    <br/>
+
+3.  **Phase 3: Enterprise Hardening & Scale** <Badge text="Planned" variant="tip" />
+
+    Moving toward a full version 1.0 with advanced orchestration and security.
+
+    * **Distribution:** Automated binary releases for Linux, macOS, and Windows.
+    * **Strict Ordering:** Enhanced support for strictly ordered delivery and partitioning.
+    * **Orchestration:** Official **Helm Charts** and K8s manifests for production.
+    * **Security:** Native TLS/mTLS support across all storage and publisher drivers.
+    * **Throughput Optimization:** Advanced tuning for high-frequency polling and publisher batching.
+    * **Advanced Observability:** Pre-built Grafana dashboards for standard OTel metrics.
+
+</Steps>
+
+---
+
+## Help Us Build the Future
+
+We prioritize features based on community demand. If you need a specific storage engine or publisher
+that isn't listed here, or if you'd like to help build one of the Phase 2 integrations, check out
+our **[Contribution Guide](/project/contributing/)**.

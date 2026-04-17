@@ -51,12 +51,12 @@ export default defineConfig({
                     autogenerate: { directory: 'spec' },
                 },
                 {
-                    label: 'Community',
+                    label: 'Project',
                     items: [
-                        {label: 'Contribute', link: 'contribute'},
-                        {label: 'Discord', link: 'https://discord.gg/Tk3jwfm7'},
+                    { label: 'Roadmap', link: 'project/roadmap' },
+                    { label: 'How to Contribute', link: 'project/contributing' },
                     ]
-                }
+                },
             ],
         }),
     ],
