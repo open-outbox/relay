@@ -151,6 +151,37 @@ In order to use Kafka as the publisher:
 > If you prefer a graphical interface for inspecting messages, run
 > `make up-kafka-ui` and visit [http://localhost:8081](http://localhost:8081)
 
+## Contributing to Documentation
+
+Our documentation is powered by **Starlight** and is located in the `/docs` directory.
+
+### Local Documentation Development
+
+1. **Install Dependencies**:
+   Navigate to the docs folder and install the frontend dependencies:
+
+   ```bash
+   cd docs && npm install
+
+2. **Generate API Reference**: We use `gomarkdoc` to sync code comments with the documentation. Run this from the root of the project:
+
+    ```bash
+    make gen-api
+    ```
+
+3. **Run the Dev Server**: Start the local documentation site with live-reloading:
+
+    ```bash
+    make docs-dev
+    ```
+
+The site will be available at [http://localhost:4321](http://localhost:4321).
+
+### Content Structure
+
+* **Guides & Docs**: Located in [docs/src/content/docs/](./docs/src/content/docs/). These are .md or .mdx files.
+* **API Reference**: Automatically generated into [docs/src/content/docs/reference/api/](docs/src/content/docs/reference/api/). Do not edit these manually; update the Go docstrings instead and run `make gen-api`.
+
 ## Local development environment variables
 
 To control the producer, or the publishers you can use these
@@ -285,14 +316,14 @@ commands used to create the `outbox_events` table in Postgres, and test the `ote
 | `make db-init` | Detects STORAGE_TYPE and applies the correct SQL schema. |
 | `make test-otel` | Send a batch of test traces to verify the OTel pipeline. |
 
-## 🚦 Pull Request Standards
+## Pull Request Standards
 
 * **Conventional Commits**: We use [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`). This allows us to automate our changelog.
 * **Coverage**: New features must include unit or integration tests. We aim for high coverage on the "Drain" and "Lease" logic.
 * **Single Responsibility**: Keep PRs focused. If you find a bug while adding a feature, please submit two separate PRs.
 * **Code of Conduct**: By contributing to this project, you agree to abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). We strive to maintain a welcoming and professional community.
 
-## 🏗 Architecture Principles
+## Architecture Principles
 
 * **Statelessness**: The Relay must never store state in memory that isn't backed by the database.
 * **Context Awareness**: All database and network calls must respect the `context.Context` for graceful shutdowns.
