@@ -150,58 +150,13 @@ DB update), the same event may be published twice. **Consumers must be idempoten
 
 ## ⚙️ Configuration
 
-The OpenOutbox Relay is configured entirely via environment variables.
+The OpenOutbox Relay is designed to be cloud-native and is configured entirely via
+environment variables. These are divided into core infrastructure, engine tuning
+(polling logic), reliability, and publisher-specific settings (Kafka/NATS).
 
-### 1. Core Infrastructure & Connectivity
+For a complete list of variables, default values, and tuning guides, see our documentation:
 
-| Variable | Description | Options / Example | Default |
-| :--- | :--- | :--- | :--- |
-| `STORAGE_TYPE` | Database engine type | `postgres`, (`MySQL` support coming soon), | `postgres` |
-| `PUBLISHER_TYPE` | Target message broker | `nats`, `kafka`, `redis`, `stdout`, `null` | `stdout` |
-| `STORAGE_URL` | DB Connection string | `postgres://user:pass@host:5432/db` | — |
-| `PUBLISHER_URL` | Broker address | `localhost:9092` or `nats://localhost:4222` | `localhost:9092` |
-| `RELAY_ID` | Unique ID for this instance | `relay-worker-01` | `os.Hostname()` |
-| `ENVIRONMENT` | Execution mode | `production`, `development` | `production` |
-
-### 2. Engine Tuning (Outbox Polling)
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `POLL_INTERVAL` | Frequency of DB polling for new events | `500ms` |
-| `BATCH_SIZE` | Max events to process in a single iteration | `100` |
-| `LEASE_TIMEOUT` | Duration before a "DELIVERING" event is considered stuck | `3m` |
-| `REAP_BATCH_SIZE` | Number of expired leases to reset per cleanup cycle | `100` |
-| `SERVER_PORT` | HTTP Server for health checks and metrics | `:9000` |
-
-### 3. Reliability & Backoff
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `RETRY_MAX_ATTEMPTS` | Max attempts before an event is marked `DEAD` | `25` |
-| `RETRY_BASE_DELAY` | Starting delay for exponential backoff | `1s` |
-| `RETRY_MAX_DELAY` | Maximum delay cap for backoff | `24h` |
-| `RETRY_JITTER` | Randomness factor (0.15 = 15% jitter) | `0.15` |
-
-### 4. Kafka Specific Tuning
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `KAFKA_BATCH_SIZE` | **Critical:** Set to `1` to bypass client-side double-batching | `1` |
-| `KAFKA_BATCH_BYTES` | Maximum batch size in bytes | `10485760` |
-| `KAFKA_COMPRESSION` | `none`, `gzip`, `snappy`, `lz4`, `zstd` | `snappy` |
-| `KAFKA_REQUIRED_ACKS` | `all`, `one`, `none` | `all` |
-| `KAFKA_ASYNC` | Set `false` for "At-Least-Once" delivery | `false` |
-| `KAFKA_WRITE_TIMEOUT` | Timeout for writing to the broker | `10s` |
-
-### 5. Observability (OpenTelemetry)
-
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `OTEL_TRACES_EXPORTER` | Destination for trace data | `otlp`, `console`, `none` |
-| `OTEL_METRICS_EXPORTER` | Destination for metric data | `otlp`, `prometheus`, `none` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`| OTLP Collector address | `http://localhost:4317` |
-| `OTEL_EXPORTER_OTLP_PROTOCOL`| Transport protocol | `grpc`, `http/protobuf` |
-| `OTEL_BSP_SCHEDULE_DELAY` | Interval between span exports | `5000ms` |
+**[Read the Full Configuration Guide](https://open-outbox.dev/reference/configuration)**
 
 ## 📚 Documentation & Community
 
