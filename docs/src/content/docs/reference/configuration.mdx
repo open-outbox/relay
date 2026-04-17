@@ -1,0 +1,384 @@
+---
+title: Configuration Reference
+description: A complete guide to OpenOutbox Relay environment variables.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
+
+
+All configuration is handled via environment variables. You can set these in your `docker-compose.yml`, Kubernetes Deployment, or local shell.
+
+<Aside type="tip">
+If a variable is set in both the shell and a .env file, the shell environment variable takes precedence.
+</Aside>
+
+## Core Infrastructure Configuration
+
+Basic connectivity and engine settings. These are the basic required configurations needed to run the Relay.
+
+---
+
+### `STORAGE_TYPE`
+
+<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `postgres`
+
+The database engine type used for the outbox table. Currently, PostgreSQL is the primary supported engine.
+
+---
+
+### `PUBLISHER_TYPE`
+
+<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `stdout`
+
+The target message broker where events will be delivered. Supported options: `nats`, `kafka`, `redis`, `stdout`, `null`.
+
+---
+
+### `STORAGE_URL`
+
+<Badge variant="danger" text="Required"></Badge> <Badge variant="default" text="DSN"></Badge>
+
+**Default:** —
+
+The full connection string for your source database.
+**Example:** `postgres://user:pass@host:5432/db`
+
+---
+
+### `PUBLISHER_URL`
+
+<Badge variant="danger" text="Required"></Badge> <Badge variant="default" text="URL"></Badge>
+
+**Default:** —
+
+The connection address for your message broker.
+**Example:** `localhost:9092` (Kafka) or `nats://localhost:4222` (NATS).
+
+---
+
+### `RELAY_ID`
+
+<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `os.Hostname()`
+
+A unique identifier for this Relay instance. Essential for lease management when running multiple workers.
+
+---
+
+### `ENVIRONMENT`
+
+<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `production`
+
+The execution mode for the Relay. Use `development` for more verbose local logging and debugging.
+
+---
+
+## Engine Tuning
+
+Controls how the Relay polls the database and manages event ownership.
+
+---
+
+### `POLL_INTERVAL`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+**Default:** `500ms`
+
+The idle-state delay. The Relay operates in Draining Mode (processing batches back-to-back without sleeping) until one of the following occurs:
+
+1. Empty Batch: No more PENDING events are found in the database.
+2. Process Error: An error occurs during the polling or delivery cycle.
+
+In these cases, the Relay sleeps for the `POLL_INTERVAL` duration before retrying.
+
+---
+
+### `BATCH_SIZE`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Integer"></Badge>
+
+**Default:** `100`
+
+The maximum number of events the Relay will claim and attempt to process in a single polling iteration.
+
+---
+
+### `LEASE_TIMEOUT`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+**Default:** `3m`
+
+The time allowed for an event to stay in the `DELIVERING` state before it is considered "stuck" (due to a worker crash) and becomes eligible for a retry.
+
+---
+
+### `REAP_BATCH_SIZE`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Integer"></Badge>
+
+**Default:** `100`
+
+The number of expired leases the cleanup engine will reset back to `PENDING` in a single maintenance cycle.
+
+<Aside type="caution">
+  Make sure `LEASE_TIMEOUT` is significantly higher than your average network latency to prevent duplicate processing.
+  The default value of `3m` is considered for a zero delay environment each batch can be processed under a second.
+</Aside>
+
+---
+
+### `SERVER_PORT`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>
+
+Default: :8080
+
+The address and port where the Relay's HTTP server listens. This server is only used to expose statistics (`/stats`) for now.
+Supports standard Go address formats like `:8080` or `127.0.0.1:8080`.
+
+---
+
+## Reliability & Backoff
+
+Settings for handling failures and retries.
+
+---
+
+### `RETRY_MAX_ATTEMPTS`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Integer"></Badge>
+
+Default: 25
+
+The maximum number of delivery attempts before an event is considered permanently failed. Once this limit is
+reached, the status is updated to DEAD and requires manual intervention or a status reset to be retried.
+
+---
+
+### `RETRY_BASE_DELAY`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 1s
+
+The starting wait time for the exponential backoff algorithm. This is the duration the Relay waits after
+the very first failure.
+
+---
+
+### `RETRY_MAX_DELAY`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 24h
+
+The ceiling for exponential backoff. Even if the calculated delay for the next retry exceeds this value,
+the Relay will cap the wait time at this limit to ensure the event is retried at least once per day.
+
+---
+
+### `RETRY_JITTER`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Float"></Badge>
+
+Default: 0.15
+
+A randomness factor (0.15 = 15%) applied to each backoff calculation. This prevents "thundering herd" issues
+by ensuring that multiple failed events don't all retry at the exact same millisecond.
+
+---
+
+## NATS Specific Configurations
+
+These settings only apply when `PUBLISHER_TYPE="nats"`.
+
+---
+
+### `NATS_PUBLISH_TIMEOUT`
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 5s
+
+The maximum amount of time the Relay will wait for an acknowledgment from the NATS server
+(or JetStream) before timing out the request.
+
+---
+
+
+## Kafka Specific Configurations
+
+These settings only apply when `PUBLISHER_TYPE="kafka"`.
+
+---
+
+### `KAFKA_BATCH_SIZE`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Integer"></Badge>
+
+**Default:** `1`
+
+<Aside type="caution" title="Avoid Double-Batching">
+  It is recommended to keep this at `1`. Since the Relay already manages batching from the database,
+  setting this to `1` bypasses the Kafka client's internal double-batching, ensuring lower latency
+  and more predictable delivery.
+</Aside>
+
+---
+
+### `KAFKA_BATCH_BYTES`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Bytes" />
+
+**Default:** `10485760` (10MB)
+
+The maximum total size of a batch in bytes. The producer will trigger a request when
+either `KAFKA_BATCH_SIZE` or `KAFKA_BATCH_BYTES` is reached.
+
+---
+
+### `KAFKA_BATCH_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `10ms`
+
+The maximum time to wait before sending a partial batch if the size requirements haven't been met.
+
+---
+
+### `KAFKA_ASYNC`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Boolean"></Badge>
+
+**Default:** `false`
+
+When set to `false`, the Relay waits for an acknowledgment from Kafka before proceeding.
+Set this to `false` for guaranteed **"At-Least-Once"** delivery. Setting it to `true` increases
+throughput but risks message loss if the Relay crashes.
+
+---
+
+### `KAFKA_COMPRESSION`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `snappy`
+
+The compression codec used for messages sent to Kafka. Supported options: `none`, `gzip`, `snappy`, `lz4`, `zstd`. `snappy` provides a good balance between CPU usage and compression ratio.
+
+---
+
+### `KAFKA_REQUIRED_ACKS`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `all`
+
+The number of acknowledgments the producer requires the leader to have received before considering a request complete. Options: `all` (maximum durability), `one` (faster), or `none` (fire and forget).
+
+---
+
+### `KAFKA_MAX_ATTEMPTS`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Integer" />
+
+**Default:** `5`
+
+The number of times the Kafka producer will attempt to resend a message if the initial write fails.
+
+---
+
+### `KAFKA_WRITE_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `10s`
+
+The maximum time to wait for a successful write acknowledgment from the Kafka broker.
+
+---
+
+### `KAFKA_READ_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `10s`
+
+The maximum time to wait for a response when reading from the Kafka broker (e.g., during metadata updates).
+
+---
+
+## Observability (OpenTelemetry)
+
+These settings control how the Relay exports traces and metrics to your observability stack.
+
+---
+
+### `OTEL_TRACES_EXPORTER`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `none`
+
+Defines the destination for trace data. Supported options: `otlp`, `console`, or `none`.
+
+---
+
+### `OTEL_METRICS_EXPORTER`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `none`
+
+Defines the destination for metric data. Supported options: `otlp`, `prometheus`, `console`, or `none`.
+
+---
+
+### `OTEL_EXPORTER_OTLP_ENDPOINT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="URL" />
+
+**Default:** `http://localhost:4317`
+
+The address of your OpenTelemetry Collector or backend. Use the `4317` port for gRPC and `4318` for HTTP.
+
+---
+
+### `OTEL_EXPORTER_OTLP_PROTOCOL`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `grpc`
+
+The transport protocol used for the OTLP exporter. Supported options: `grpc` or `http/protobuf`.
+
+---
+
+### `OTEL_BSP_EXPORT_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `30000` (30s)
+
+The maximum time the OpenTelemetry SDK will wait for a batch of spans to be exported before timing out the request.
+
+---
+
+### `OTEL_BSP_SCHEDULE_DELAY`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `5000` (5s)
+
+The interval between two consecutive batch exports. Reducing this value decreases memory usage by clearing spans
+more frequently, but increases CPU and network overhead.

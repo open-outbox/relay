@@ -59,3 +59,17 @@ footer a[href*="edit"] svg {
 .right-sidebar ul {
     padding-top: 0;
 }
+
+/* Targets h3 headers that contain a <code> tag */
+.sl-markdown-content h3 code {
+  font-size: 1.1rem !important;
+  color: var(--sl-color-accent-high); /* Optional: makes the var name pop */
+  background-color: var(--sl-color-bg-inline-code);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+/* Reduces the spacing between the small header and the badges */
+.sl-markdown-content h3 + p {
+  margin-top: -0.5rem !important;
+}
