@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16
+    volumes:
+      - ../../schema/postgres/open-outbox.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../../schema/postgres/maintenance.sql:/docker-entrypoint-initdb.d/02-maintenance.sql:ro
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["-js", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/varz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  nats-setup:
+    image: natsio/nats-box:latest
+    depends_on:
+      nats:
+        condition: service_healthy
+    entrypoint:
+      - "sh"
+      - "-c"
+      - |
+        # Use the nats-box tool to check server availability before creating the stream
+        nats str add OUTBOX_EVENTS \
+          --server nats:4222 \
+          --subjects 'outbox.events.>' \
+          --storage memory \
+          --retention limits \
+          --max-msgs=-1 \
+          --max-bytes=-1 \
+          --discard old \
+          --dupe-window 2m \
+          --replicas 1 \
+          --defaults
+
+  relay:
+    image: openoutbox/relay:v4
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      STORAGE_TYPE: "postgres"
+      STORAGE_URL: "postgres://postgres:postgres@postgres:5432/postgres"
+      PUBLISHER_TYPE: "nats"
+      PUBLISHER_URL: "nats://nats:4222"
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+
+  cli:
+    image: openoutbox/relay:v2
+    entrypoint: ["/app/cli"]
+    environment:
+      - STORAGE_TYPE=postgres
+      - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+    profiles: ["tools"]
