@@ -24,8 +24,8 @@ export default defineConfig({
                 {
                     label: 'Getting Started',
                     items: [
-                        { label: 'Introduction', link: '/' },
-                        { label: 'Quick Start', link: '/relay/quick-start' },
+                        { label: 'Introduction', link: '/tutorial/introduction' },
+                        { label: 'Quick Start', link: '/tutorial/quick-start' },
                     ],
                 },
                 {
@@ -36,7 +36,7 @@ export default defineConfig({
                     label: 'Reference',
                     collapsed: true,
                     items: [
-                        { label: 'Configuration', link: '/reference/config' },
+                        { label: 'Configuration', link: '/reference/configuration' },
                         {
                             label: 'API Reference',
                             collapsed: true,

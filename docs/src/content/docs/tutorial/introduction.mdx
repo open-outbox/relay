@@ -1,0 +1,55 @@
+---
+title: Introduction
+description: Learn how Open Outbox Relay ensures reliable event delivery.
+sidebar:
+  order: 0
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+**Open Outbox Relay** is an open-source, high-performance implementation of the **Transactional Outbox Pattern**. It bridges the gap between your primary database and your message broker (Kafka, NATS, etc.) to ensure that every business event is delivered—without exception.
+
+---
+
+## Why Open Outbox?
+
+In distributed systems, updating a database and sending a message simultaneously is risky. If the message broker is down, you lose data. If the database fails after the message is sent, you have "ghost" events.
+
+Open Outbox solves this by treating event publishing as a database transaction.
+
+<CardGrid>
+  <Card title="At-Least-Once Delivery" icon="approve-check-circle">
+    Events are persisted in your DB first. The Relay ensures they reach your broker even if the network fluctuates.
+  </Card>
+  <Card title="Database Agnostic" icon="setting">
+    Designed for PostgreSQL, with a pluggable architecture for other storage engines and message brokers.
+  </Card>
+  <Card title="High Performance" icon="rocket">
+    Written in Go, utilizing batch processing and non-blocking I/O to handle thousands of events per second.
+  </Card>
+  <Card title="Self-Healing" icon="heart">
+    Built-in lease management allows multiple Relay instances to coordinate and recover from worker crashes.
+  </Card>
+</CardGrid>
+
+---
+
+## How it Works
+
+1.  **Produce:** Your application saves a business change and an event record into the `outbox_events` table within a **single transaction**.
+2.  **Poll:** The Relay polls the database for pending events using a highly optimized "skip locked" query.
+3.  **Publish:** The Relay pushes the events to your configured broker (Kafka, NATS, etc.).
+4.  **Acknowledge:** Once the broker confirms receipt, the Relay marks the event as delivered.
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Get Started" icon="right-arrow">
+    Follow the [Quick Start](/tutorial/quick-start) to run the demo environment in under 5 minutes.
+  </Card>
+  <Card title="Core Concepts" icon="open-book">
+    Deep dive into [At-Least-Once Delivery](/concepts/delivery) and the Outbox pattern.
+  </Card>
+</CardGrid>
