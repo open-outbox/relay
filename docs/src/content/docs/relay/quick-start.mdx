@@ -1,0 +1,98 @@
+---
+title: Quick Start
+description: Get up and running with Open Outbox in minutes using our live demo or manual setup.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem, Steps, Aside, Code } from '@astrojs/starlight/components';
+
+The **Open Outbox Relay** is a high-performance bridge that ensures "at-least-once" delivery of events from your database to your message broker.
+
+---
+
+## Live Demo
+
+The fastest way to see the Relay in action is our pre-configured demo environment. It spins up **Postgres**, **NATS**, and the **Relay** automatically.
+
+<Steps>
+
+1. **Start the environment:**
+
+    ```bash
+    git clone https://github.com/open-outbox/relay.git
+    cd relay/examples/demo
+    docker compose up -d
+    ```
+
+2. **Simulate a business event:**
+    Insert a record directly into the Postgres outbox table. The Relay will detect it and deliver it to NATS instantly.
+
+    ```bash
+    docker compose exec postgres psql -U postgres -d postgres -c \
+    "INSERT INTO outbox_events (event_id, event_type, payload, partition_key)
+    VALUES (gen_random_uuid(), 'outbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
+    ```
+
+3. **Check the logs:**
+
+    Verify the Relay picked up the event:
+
+    ```bash
+    docker compose logs relay
+    ```
+
+</Steps>
+
+---
+
+## Production Setup
+
+Once you've seen the demo, follow these steps to integrate the Relay into your own stack.
+
+### 1. Database Schema
+
+The Relay requires an `outbox_events` table. Run the standard DDL found in:
+[`schema/postgres/open-outbox.sql`](https://github.com/open-outbox/relay/blob/main/schema/postgres/open-outbox.sql)
+
+<Aside type="tip">
+  Ensure your database user has `INSERT`, `SELECT`, and `UPDATE` permissions on this table.
+</Aside>
+
+### 2. Deployment
+
+Configure the Relay to point to your specific database and broker.
+
+<Tabs>
+  <TabItem label="Docker Compose">
+    ```yaml
+    services:
+      relay:
+        image: openoutbox/relay:latest
+        container_name: openoutbox-relay
+        environment:
+          - STORAGE_TYPE=postgres
+          - STORAGE_URL=postgres://user:password@server:5432/db
+          - PUBLISHER_TYPE=kafka # kafka, nats, stdout, etc.
+          - PUBLISHER_URL=kafka:9092 # broker url
+        restart: always
+    ```
+  </TabItem>
+  <TabItem label="Docker CLI">
+    ```bash
+    docker run -d \
+      --name openoutbox-relay \
+      -e STORAGE_URL="postgres://user:pass@server:5432/db" \
+      -e PUBLISHER_TYPE="kafka" \
+      -e PUBLISHER_URL="localhost:9092" \
+      openoutbox/relay:latest
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Next Steps
+
+- Learn how to [Prune Historical Data](/operations/maintenance) to keep your database lean.
+- Explore the [Configuration Reference](/reference/configuration) for advanced tuning.
