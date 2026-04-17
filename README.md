@@ -28,7 +28,7 @@ It is a high-performance daemon designed for the **Transactional Outbox Pattern*
 ### 1. Database Schema
 
 The Relay requires an `outbox_events` table. Run the standard DDL found in:
-[`schema/postgres/openoutbox.sql`](./schema/postgres/openoutbox.sql)
+[`schema/postgres/open-outbox.sql`](./schema/postgres/open-outbox.sql)
 
 ### 2. Run with Docker
 
@@ -66,16 +66,23 @@ The Relay includes a built-in CLI for maintenance, cleanup, and manual intervent
 
 To keep the outbox table performant, you can periodically prune successfully delivered or exhausted (dead) events.
 
-```bash
-relay-cli prune --delivered-age 7d --dead-age 30d --dry-run
+The maintenance scripts require two specific indices to ensure high
+performance. Please execute the standard DDL located in:
+[schema/postgres/maintenance.sql](./schema/postgres/maintenance.sql) to create these indices.
 
-relay-cli prune --delivered-age 7d --dead-age 30d
+```bash
+cli prune --delivered-age 7d --dead-age 30d --dry-run
+
+cli prune --delivered-age 7d --dead-age 30d
 ```
 
 Using docker:
 
 ```bash
-docker run --rm openoutbox/relay:latest ./cli prune --delivered-age 7d --dead-age 30d
+docker run --rm openoutbox/relay:latest\
+ ./cli prune \
+ --delivered-age 7d --dead-age 30d \
+ --storage-url postgres://postgres:postgres@db:5432/postgres
 ```
 
 ## 🛡️ Reliability Guarantees

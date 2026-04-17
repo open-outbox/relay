@@ -9,7 +9,7 @@ echo "Configuring NATS JetStream: $STREAM_NAME..."
 echo "Listening on subjects: $SUBJECT_PATTERN"
 
 # Create the stream using the dynamic subject pattern
-docker-compose -f deployments/docker-compose.yaml exec nats-box \
+docker-compose -f deployments/infra-docker-compose.yaml exec nats-box \
   nats stream add "$STREAM_NAME" \
   --server "$NATS_SERVER" \
   --subjects "$SUBJECT_PATTERN" \

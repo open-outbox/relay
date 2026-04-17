@@ -8,13 +8,13 @@ PARTITIONS=${3:-3}
 echo "Configuring Kafka Topic: $TOPIC_NAME..."
 
 # Check if topic exists
-EXISTING=$(docker-compose -f deployments/docker-compose.yaml exec kafka \
+EXISTING=$(docker-compose -f deployments/infra-docker-compose.yaml exec kafka \
   /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server "$BOOTSTRAP_SERVER" | grep -w "$TOPIC_NAME")
 
 if [ "$EXISTING" == "$TOPIC_NAME" ]; then
     echo "Topic '$TOPIC_NAME' already exists. Skipping creation."
 else
-    docker-compose -f deployments/docker-compose.yaml exec kafka \
+    docker-compose -f deployments/infra-docker-compose.yaml exec kafka \
       /opt/kafka/bin/kafka-topics.sh --create \
       --bootstrap-server "$BOOTSTRAP_SERVER" \
       --topic "$TOPIC_NAME" \

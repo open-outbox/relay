@@ -52,7 +52,7 @@ docker-build: ## Builds the production-ready OCI container image.
 docs-dev: ## Runs the documentation website in dev mode.
 	cd docs && npm install && npm run dev
 
-gen-api:
+gen-api: ## Generates the api reference docs into /docs.
 	gomarkdoc \
   		--template-file file=docs/starlight-file.gotxt \
   		--template-file package=docs/starlight-package.gotxt \
@@ -160,9 +160,10 @@ test-otel: ## Send a batch of test traces to verify the OTel pipeline
 db-init: ## Detects STORAGE_TYPE and applies the correct SQL schema
 	@echo "Initializing $(DB_TYPE) schema..."
 ifeq ($(DB_TYPE),postgres)
-	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/openoutbox.sql
+	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/open-outbox.sql
+	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/maintenance.sql
 else
-	@echo "Error: Unknown STORAGE_TYPE '$(DB_TYPE)'. Please check your .env"
+	@echo "Error: Unsupported STORAGE_TYPE '$(DB_TYPE)'. Please check your .env"
 	@exit 1
 endif
 	@echo "$(DB_TYPE) schema applied."

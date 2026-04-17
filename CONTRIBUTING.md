@@ -25,17 +25,17 @@ The easiest way to see the Relay in action is to use the provided local stack.
     cd relay
     ```
 
-2. Spin up the storage using docker compose and create `outbox_events` table:
+2. Create the required .env file
+
+    ```bash
+    cp .env.example .env
+    ```
+
+3. Spin up the storage using docker compose and create `outbox_events` table:
 
     ```bash
     make up-postgres
     make db-init
-    ```
-
-3. Create the required .env file for the relay
-
-    ```bash
-    cp .env.example .env
     ```
 
 4. Run the Relay in development mode:
