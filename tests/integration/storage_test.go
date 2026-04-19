@@ -19,7 +19,7 @@ func TestEngine_Integration_Postgres(t *testing.T) {
 	// 1. Spin up a real Postgres container
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:15-alpine",
-		postgres.WithDatabase("outbox_db"),
+		postgres.WithDatabase("openoutbox_db"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("pass"),
 		testcontainers.WithWaitStrategy(

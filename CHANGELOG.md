@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **OpenOutbox Relay** will be documented in this file. 
+All notable changes to the **Open Outbox Relay** will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0-beta.1] - 2026-04-10
@@ -18,7 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### ⚙️ Changed
 
 - Refactored internal storage interfaces to support future MySQL and MongoDB providers.
-- Optimized database indexing strategy for the standard `openoutbox_events` schema.
+- Optimized database indexing strategy for the `openoutbox_events` schema.
 
 ### 🛡️ Security
 

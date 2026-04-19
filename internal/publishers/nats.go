@@ -22,10 +22,10 @@ type Nats struct {
 }
 
 // NewNats establishes a connection to a NATS server and initializes a JetStream context.
-// It sets a client name "OpenOutbox-Relay" on the connection to facilitate easier
+// It sets a client name "Open-Outbox-Relay" on the connection to facilitate easier
 // identification in NATS monitoring tools.
 func NewNats(url string, publishTimeout time.Duration) (*Nats, error) {
-	nc, err := nats.Connect(url, nats.Name("OpenOutbox-Relay"))
+	nc, err := nats.Connect(url, nats.Name("Open-Outbox-Relay"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}

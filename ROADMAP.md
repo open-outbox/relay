@@ -1,6 +1,6 @@
 # Roadmap
 
-The OpenOutbox Relay is evolving from a robust core into a high-performance, universal distribution engine for the Outbox Pattern.
+The Open Outbox Relay is evolving from a robust core into a high-performance, universal distribution engine for the Transactional Outbox Pattern.
 
 ## Phase 1: Foundation & Observability (Completed)
 

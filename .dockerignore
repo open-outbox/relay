@@ -12,7 +12,6 @@ bin/
 *.exe
 *.test
 *.out
-openoutbox-relay
 
 # --- Documentation & Configs ---
 # These aren't needed inside the Go binary container

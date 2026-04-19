@@ -24,7 +24,7 @@ func main() {
 
 	// Load config with fallbacks
 	dbURL := getEnv("STORAGE_URL", "postgres://postgres:postgres@localhost:5432/postgres")
-	eventType := getEnv("LOCAL_TEST_TOPIC", "outbox.events.v1")
+	eventType := getEnv("LOCAL_TEST_TOPIC", "openoutbox.events.v1")
 	batchSize, _ := strconv.Atoi(getEnv("LOCAL_PRODUCER_BATCH_SIZE", "1000"))
 
 	intervalStr := getEnv("LOCAL_PRODUCER_INTERVAL", "1s")
@@ -41,7 +41,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	log.Printf("openOutbox producer: Inserting %d '%s' events/sec", batchSize, eventType)
+	log.Printf("open Outbox producer: Inserting %d '%s' events/sec", batchSize, eventType)
 
 	for {
 		batch := &pgx.Batch{}

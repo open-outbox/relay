@@ -47,7 +47,7 @@ clean: ## Remove build binaries and clear Go test cache
 	go clean -testcache
 
 docker-build: ## Builds the production-ready OCI container image.
-	docker build -f deployments/Dockerfile -t openoutbox-relay:v1.0 .
+	docker build -f deployments/Dockerfile -t openoutbox/relay:latest .
 
 docs-dev: ## Runs the documentation website in dev mode.
 	cd docs && npm install && npm run dev

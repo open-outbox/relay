@@ -1,6 +1,6 @@
-# Contributing to OpenOutbox Relay
+# Contributing to Open Outbox Relay
 
-First off, thank you for considering contributing! It’s people like you who make OpenOutbox a reliable standard for everyone.
+First off, thank you for considering contributing! It’s people like you who make Open Outbox a reliable standard for everyone.
 
 We love contributions! If you want to help, please check our [Roadmap](./ROADMAP.md) to see our prioritized features. Look for Phase 2 items if you are interested in building new storage or publisher engines.
 
@@ -190,7 +190,7 @@ to the [configuration reference](https://open-outbox.dev/reference/configuration
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `LOCAL_TEST_TOPIC` | Base name for publisher subjects/topics | `outbox.events.v1` |
+| `LOCAL_TEST_TOPIC` | Base name for publisher subjects/topics | `openoutbox.events.v1` |
 | `LOCAL_NATS_STREAM` | JetStream stream name for NATS mode | `OPENOUTBOX_EVENTS` |
 | `LOCAL_OTEL_TEST_TRACE_COUNT` | Traces to simulate during `make test-otel` | `100` |
 | `LOCAL_PRODUCER_BATCH_SIZE` | Records per batch inserted by test producer | `10000` |

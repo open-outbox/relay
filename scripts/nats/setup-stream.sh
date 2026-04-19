@@ -2,8 +2,8 @@
 
 # Arguments with defaults
 NATS_SERVER=${1:-"nats:4222"}
-STREAM_NAME=${2:-"OUTBOX_EVENTS"}
-SUBJECT_PATTERN=${3:-"outbox.events.v1"}
+STREAM_NAME=${2:-"OPENOUTBOX_EVENTS"}
+SUBJECT_PATTERN=${3:-"openoutbox.events.v1"}
 
 echo "Configuring NATS JetStream: $STREAM_NAME..."
 echo "Listening on subjects: $SUBJECT_PATTERN"

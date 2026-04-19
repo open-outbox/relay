@@ -40,7 +40,7 @@ services:
         # Use the nats-box tool to check server availability before creating the stream
         nats str add OPENOUTBOX_EVENTS \
           --server nats:4222 \
-          --subjects 'outbox.events.>' \
+          --subjects 'openoutbox.events.>' \
           --storage memory \
           --retention limits \
           --max-msgs=-1 \

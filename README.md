@@ -1,6 +1,6 @@
 # Open Outbox Relay
 
-**OpenOutbox Relay** is the official reference implementation of the [Open Outbox Specification](https://github.com/open-outbox/openoutbox-spec).
+**Open Outbox Relay** is the official reference implementation of the [Open Outbox Specification](https://github.com/open-outbox/openoutbox-spec).
 
 It is a high-performance daemon designed for the **Transactional Outbox Pattern**. By bridging your database and message brokers like **Kafka** or **NATS**, it ensures `at-least-once` delivery, solving distributed consistency challenges without the complexity of 2PC or distributed transactions.
 
@@ -78,7 +78,7 @@ it and deliver it to NATS instantly.
 ```bash
 docker compose exec postgres psql -U postgres -d postgres -c \
 "INSERT INTO openoutbox_events (event_id, event_type, payload, partition_key)
-VALUES (gen_random_uuid(), 'outbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
+VALUES (gen_random_uuid(), 'openoutbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
 ```
 
 ## Operational Commands
@@ -150,7 +150,7 @@ DB update), the same event may be published twice. **Consumers must be idempoten
 
 ## ⚙️ Configuration
 
-The OpenOutbox Relay is designed to be cloud-native and is configured entirely via
+The Open Outbox Relay is designed to be cloud-native and is configured entirely via
 environment variables. These are divided into core infrastructure, engine tuning
 (polling logic), reliability, and publisher-specific settings (Kafka/NATS).
 
@@ -160,17 +160,17 @@ For a complete list of variables, default values, and tuning guides, see our doc
 
 ## 📚 Documentation & Community
 
-Stay connected and help us improve the OpenOutbox ecosystem:
+Stay connected and help us improve the Open Outbox ecosystem:
 
 * **[Contribution Guide](./CONTRIBUTING.md)**: Ready to help? Check out our guide on setting up your local environment, running tests with the `Makefile`, and our pull request process.
 * **[Changelog](./CHANGELOG.md)**: View a detailed list of changes, improvements, and bug fixes for every release.
-* **[OpenOutbox Specification](https://github.com/open-outbox/openoutbox-spec)**: Learn more about the standard this relay implements.
+* **[Open Outbox Specification](https://github.com/open-outbox/spec)**: Learn more about the standard this relay implements.
 
 ---
 
 ## Project Status & Roadmap
 
-OpenOutbox is currently in **Alpha** (`v0.1.x`). We are actively working on scaling the Relay and adding more producer drivers.
+Open Outbox is currently in **Alpha** (`v0.1.x`). We are actively working on scaling the Relay and adding more producer drivers.
 
 Check out our [**Project Roadmap**](./ROADMAP.md) to see what's coming next, including:
 
@@ -183,4 +183,4 @@ Check out our [**Project Roadmap**](./ROADMAP.md) to see what's coming next, inc
 
 ## License
 
-[MIT License](./LICENSE) — Created by the OpenOutbox Team.
+[MIT License](./LICENSE) — Created by the Open Outbox Team.

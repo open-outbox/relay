@@ -1,4 +1,4 @@
-// Package main is the entry point for the OpenOutbox Relay.
+// Package main is the entry point for the Open Outbox Relay.
 // It sets up signal handling, builds the dependency injection container,
 // and manages the lifecycle of the relay engine and the HTTP server.
 package main
@@ -71,7 +71,7 @@ func run() error {
 			g.Go(func() error {
 				return engine.Start(groupCtx)
 			})
-			logger.Info("OpenOutbox Relay is running...")
+			logger.Info("Open Outbox Relay is running...")
 			return g.Wait()
 		},
 	)

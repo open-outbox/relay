@@ -31,7 +31,7 @@ The fastest way to see the Relay in action is our pre-configured demo environmen
     ```bash
     docker compose exec postgres psql -U postgres -d postgres -c \
     "INSERT INTO openoutbox_events (event_id, event_type, payload, partition_key)
-    VALUES (gen_random_uuid(), 'outbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
+    VALUES (gen_random_uuid(), 'openoutbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
     ```
 
 3. **Check the logs:**

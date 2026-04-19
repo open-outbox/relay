@@ -24,7 +24,7 @@ type OTelProviders struct {
 	Shutdown      func(context.Context) error
 }
 
-const serviceName = "openoutbox-relay"
+const serviceName = "open-outbox-relay"
 
 // NewOTelProviders bootstraps the OpenTelemetry pipeline.
 func NewOTelProviders(ctx context.Context, cfg *config.Config) (*OTelProviders, error) {

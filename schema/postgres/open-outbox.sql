@@ -76,13 +76,13 @@ CREATE TABLE openoutbox_events (
 -- It allows the Relay to find the oldest available PENDING events without a full table scan.
 -- The partial index keeps it extremely fast even as the table grows.
 CREATE INDEX IF NOT EXISTS idx_openoutbox_processing_queue
-    ON public.outbox_events (available_at ASC, created_at ASC)
+    ON public.openoutbox_events (available_at ASC, created_at ASC)
     WHERE status = 'PENDING';
 
 -- The "Reaper" Index: Used to find events stuck in 'DELIVERING' state.
 -- Allows the background reaper task to quickly find and reset expired leases.
 CREATE INDEX IF NOT EXISTS idx_openoutbox_stuck_leases
-    ON public.outbox_events (locked_at ASC)
+    ON public.openoutbox_events (locked_at ASC)
     WHERE status = 'DELIVERING';
 
 -- -----------------------------------------------------------------------------
@@ -91,11 +91,11 @@ CREATE INDEX IF NOT EXISTS idx_openoutbox_stuck_leases
 
 -- Optimizes the COUNT query for pending messages.
 CREATE INDEX IF NOT EXISTS idx_openoutbox_metrics_count
-    ON public.outbox_events (status)
+    ON public.openoutbox_events (status)
     WHERE status = 'PENDING';
 
 -- Optimizes the "Oldest Age" query by allowing the DB to find the minimum
 -- created_at within the PENDING subset.
 CREATE INDEX IF NOT EXISTS idx_openoutbox_metrics_lag
-    ON public.outbox_events (status, created_at ASC)
+    ON public.openoutbox_events (status, created_at ASC)
     WHERE status = 'PENDING';

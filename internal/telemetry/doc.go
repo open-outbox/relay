@@ -1,6 +1,6 @@
 // Package telemetry provides a centralized system for application observability.
 // It integrates structured logging, Prometheus metrics, and OpenTelemetry tracing
-// to give deep insights into the OpenOutbox Relay's operation.
+// to give deep insights into the Open Outbox Relay's operation.
 //
 // The core components of this package include:
 //   - Telemetry: A composite struct that bundles a `zap.Logger`, `Metrics` (Prometheus),
