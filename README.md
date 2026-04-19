@@ -27,7 +27,7 @@ It is a high-performance daemon designed for the **Transactional Outbox Pattern*
 
 ### 1. Database Schema
 
-The Relay requires an `outbox_events` table. Run the standard DDL found in:
+The Relay requires an `openoutbox_events` table. Run the standard DDL found in:
 [`schema/postgres/open-outbox.sql`](./schema/postgres/open-outbox.sql)
 
 ### 2. Run with Docker
@@ -77,7 +77,7 @@ it and deliver it to NATS instantly.
 
 ```bash
 docker compose exec postgres psql -U postgres -d postgres -c \
-"INSERT INTO outbox_events (event_id, event_type, payload, partition_key)
+"INSERT INTO openoutbox_events (event_id, event_type, payload, partition_key)
 VALUES (gen_random_uuid(), 'outbox.events.demo', '{\"id\": 123, \"name\": \"Alice\"}', '123');"
 ```
 

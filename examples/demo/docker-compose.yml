@@ -38,7 +38,7 @@ services:
       - "-c"
       - |
         # Use the nats-box tool to check server availability before creating the stream
-        nats str add OUTBOX_EVENTS \
+        nats str add OPENOUTBOX_EVENTS \
           --server nats:4222 \
           --subjects 'outbox.events.>' \
           --storage memory \

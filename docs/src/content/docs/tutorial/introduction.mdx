@@ -36,7 +36,7 @@ Open Outbox solves this by treating event publishing as a database transaction.
 
 ## How it Works
 
-1.  **Produce:** Your application saves a business change and an event record into the `outbox_events` table within a **single transaction**.
+1.  **Produce:** Your application saves a business change and an event record into the `openoutbox_events` table within a **single transaction**.
 2.  **Poll:** The Relay polls the database for pending events using a highly optimized "skip locked" query.
 3.  **Publish:** The Relay pushes the events to your configured broker (Kafka, NATS, etc.).
 4.  **Acknowledge:** Once the broker confirms receipt, the Relay marks the event as delivered.

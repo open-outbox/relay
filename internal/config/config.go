@@ -39,7 +39,7 @@ type Config struct {
 
 	// TableName is the name of the outbox table.
 	// This allows users to avoid naming collisions in shared databases.
-	//	Default: "outbox_events"
+	//	Default: "openoutbox_events"
 	StorageTableName string `mapstructure:"STORAGE_TABLE_NAME"`
 
 	// PublisherType determines the message broker or output

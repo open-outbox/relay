@@ -55,7 +55,7 @@ func main() {
 			)
 
 			batch.Queue(
-				`INSERT INTO outbox_events
+				`INSERT INTO openoutbox_events
 				(event_id, event_type, partition_key, payload, headers, status)
 				VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
 				uuid.New(),

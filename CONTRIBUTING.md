@@ -41,7 +41,7 @@ The easiest way to see the Relay in action is to use the provided local stack.
     cp .env.example .env
     ```
 
-4. Spin up the storage using docker compose and create `outbox_events` table:
+4. Spin up the storage using docker compose and create `openoutbox_events` table:
 
     ```bash
     make up-postgres
@@ -191,7 +191,7 @@ to the [configuration reference](https://open-outbox.dev/reference/configuration
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `LOCAL_TEST_TOPIC` | Base name for publisher subjects/topics | `outbox.events.v1` |
-| `LOCAL_NATS_STREAM` | JetStream stream name for NATS mode | `OUTBOX_EVENTS` |
+| `LOCAL_NATS_STREAM` | JetStream stream name for NATS mode | `OPENOUTBOX_EVENTS` |
 | `LOCAL_OTEL_TEST_TRACE_COUNT` | Traces to simulate during `make test-otel` | `100` |
 | `LOCAL_PRODUCER_BATCH_SIZE` | Records per batch inserted by test producer | `10000` |
 | `LOCAL_PRODUCER_INTERVAL` | Interval between test batch insertions | `1s` |
@@ -309,7 +309,7 @@ Kafka topic name.
 
 ### Observability & Database
 
-commands used to create the `outbox_events` table in Postgres, and test the `otel` collector.
+commands used to create the `openoutbox_events` table in Postgres, and test the `otel` collector.
 
 | Command | Description |
 | :--- | :--- |
