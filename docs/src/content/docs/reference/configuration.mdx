@@ -29,19 +29,6 @@ The database engine type used for the outbox table. Currently, PostgreSQL is the
 
 ---
 
-### `STORAGE_TABLE_NAME`
-
-<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
-
-**Default:** `openoutbox_events`
-
-The name of the database table where outbox events are stored. This allows the Relay to 
-operate within shared databases while avoiding naming conflicts.
-
-**Pattern**: `^[a-z0-9_]+$` (Lowercase letters, numbers, and underscores only).
-
----
-
 ### `PUBLISHER_TYPE`
 
 <Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
@@ -71,6 +58,19 @@ The full connection string for your source database.
 
 The connection address for your message broker.
 **Example:** `localhost:9092` (Kafka) or `nats://localhost:4222` (NATS).
+
+---
+
+### `STORAGE_TABLE_NAME`
+
+<Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `openoutbox_events`
+
+The name of the database table where outbox events are stored. This allows the Relay to
+operate within shared databases while avoiding naming conflicts.
+
+**Pattern**: `^[a-z0-9_]+$` (Lowercase letters, numbers, and underscores only).
 
 ---
 
