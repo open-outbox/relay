@@ -51,9 +51,14 @@ export default defineConfig({
                     ],
                 },
                 {
-                    label: 'Architecture & Spec',
-                    collapsed: true,
-                    autogenerate: { directory: 'spec' },
+                    label: 'Concepts', // Root Path: /concepts/
+                    items: [
+                        { label: 'Core Concepts', link: '/concepts/core-concepts' },
+                        { label: 'Table Schema', link: '/concepts/table-schema' },
+                        { label: 'Delivery Guarantees', link: '/concepts/delivery-guarantees' },
+                        { label: 'Event Ordering', link: '/concepts/event-ordering' },
+
+                    ],
                 },
                 {
                     label: 'Project',

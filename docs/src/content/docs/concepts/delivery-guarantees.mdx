@@ -1,0 +1,29 @@
+---
+title: Delivery Guarantees
+description: Understanding the At-Least-Once delivery model of Open Outbox.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Open Outbox is designed to solve the "Dual Write" problem. It ensures that your database state and your message broker state eventually converge.
+
+## At-Least-Once Delivery
+
+The Relay guarantees that every event recorded in the outbox table will be delivered to the broker **at least once**.
+
+### How it works
+
+1. **Atomic Commit:** Your application saves the business data and the outbox event in the same database transaction.
+2. **Persistence:** The Relay polls the database and only marks the event as delivered *after* it receives a successful acknowledgment (ACK) from the broker (Kafka/NATS).
+3. **Retries:** If the broker is down or the Relay crashes mid-flight, the event remains in the database and will be picked up again.
+
+<Aside type="danger" title="Idempotency is Required">
+Because the Relay prioritizes **reliability over uniqueness**, it is possible for the same message to be published twice (e.g., the broker receives the message but the Relay crashes before it can update the database). **Your consumers must be idempotent.**
+</Aside>
+
+## Reliability vs. Speed
+
+The level of guarantee depends on your configuration for the specific broker for example in Kafka:
+
+* **Strict (Safe):** `KAFKA_ASYNC=false` and `KAFKA_REQUIRED_ACKS=all`. The Relay waits for the broker to fully commit before moving on.
+* **Relaxed (Fast):** `KAFKA_ASYNC=true`. The Relay assumes success once the message hits its internal buffer. *Note: This can lead to data loss if the Relay crashes.*

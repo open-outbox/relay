@@ -1,0 +1,41 @@
+---
+title: Ordering & Concurrency
+description: How Open Outbox handles event sequencing and parallel processing.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Open Outbox provides **Sequential Polling**. The Relay attempts to dispatch events in the order
+they were created, but in a distributed environment, certain factors can disrupt this sequence.
+
+## How Ordering is Determined
+
+The Relay's polling engine sorts events using two primary criteria:
+
+1. **`available_at`**: Ensures that scheduled events or retries with backoff are prioritized correctly.
+2. **`created_at`**: Acts as the tie-breaker to ensure events are processed in a First-In-First-Out (FIFO) sequence.
+
+```sql
+-- The internal logic for batch selection
+ORDER BY available_at ASC, created_at ASC
+```
+
+## Strict Ordering (Phase 3)
+
+**Strict ordering is not currently implemented**. Even when running a single Relay instance,
+ordering can be disrupted if an earlier event fails and moves into a retry state while
+subsequent events are successfully published.
+
+We plan to address this in [Phase 3](/project/roadmap/) by introducing a "Block-on-Error" mechanism
+that halts a specific sequence until the failing event is either resolved or moved to the `DEAD` state.
+
+**Current limitations**:
+
+* **Concurrent Batches**: Multiple Relay instances can finish batches out of sequence.
+* **Partial Failures**: If one event in a batch fails, the Relay will continue to process newer
+events while the failed one waits for its next `available_at` window.
+
+**If you need strict FIFO right now**:
+
+Your consumers must be designed to handle out-of-order delivery (idempotency) or use the `created_at`
+timestamp or a version field in your payload to re-sequence events downstream.

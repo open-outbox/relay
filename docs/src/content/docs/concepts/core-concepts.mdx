@@ -1,0 +1,33 @@
+---
+title: Core Concepts
+description: The fundamental building blocks of the Open Outbox ecosystem.
+---
+
+Open Outbox Relay is a stateless bridge between your database and your infrastructure.
+It is built on three core pillars:
+
+### 1. The Storage (Source)
+
+The **Storage** is your source of truth. It is the database table where your application writes events.
+The Relay treats the database as a task queue, using a **Lease Model** to ensure that multiple Relay instances
+can work in parallel without stepping on each other.
+
+### 2. The Publisher (Sink)
+
+The **Publisher** is the destination for your events (e.g., Kafka, NATS). The Relay is designed to be
+"Broker Agnostic"—it maps your `event_type` to topics or subjects and ensures that headers and partition
+keys are preserved.
+
+### 3. The Relay (Engine)
+
+The **Relay** is the stateless worker. It handles three main loops:
+
+* **The Poller:** Finds and claims batches of `PENDING` events.
+* **The Dispatcher:** Sends events to the Publisher and handles retries/backoff.
+* **The Reaper:** A self-healing background task that finds "zombie" events (stuck in `DELIVERING` state)
+and resets them for a new attempt.
+
+### 4. The Event Lifecycle
+
+Every event moves through a strict state machine:
+`PENDING` → `DELIVERING` → `DELIVERED` (or `DEAD` after max retries).
