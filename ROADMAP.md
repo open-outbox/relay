@@ -12,6 +12,8 @@ The Open Outbox Relay is evolving from a robust core into a high-performance, un
 
 ## Phase 2: The Multi-Engine Ecosystem (In Progress)
 
+* **TABLESAMPLE Polling Strategy**: Implement SQL sampling to reduce lock contention and index pressure in high-concurrency clusters.
+* **Draining Strategy** : Provide config to choose from draining mode (continuous processing) or intervalled polling.
 * **MySQL Support:** Implement the `relay.Storage` interface for MySQL/MariaDB.
 * **RabbitMQ Publisher:** Support for traditional enterprise messaging via AMQP.
 * **Redis Integration:** Adding Redis (Streams/Pub-Sub) as a high-speed storage and distribution option.
