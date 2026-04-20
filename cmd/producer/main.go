@@ -26,6 +26,13 @@ func main() {
 	dbURL := getEnv("STORAGE_URL", "postgres://postgres:postgres@localhost:5432/postgres")
 	eventType := getEnv("LOCAL_TEST_TOPIC", "openoutbox.events.v1")
 	batchSize, _ := strconv.Atoi(getEnv("LOCAL_PRODUCER_BATCH_SIZE", "1000"))
+	tableName := getEnv("STORAGE_TABLE_NAME", "openoutbox_events")
+
+	query := fmt.Sprintf(`
+		INSERT INTO %s
+			(event_id, event_type, partition_key, payload, headers, status)
+			VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+		tableName)
 
 	intervalStr := getEnv("LOCAL_PRODUCER_INTERVAL", "1s")
 	interval, err := time.ParseDuration(intervalStr)
@@ -55,9 +62,7 @@ func main() {
 			)
 
 			batch.Queue(
-				`INSERT INTO openoutbox_events
-				(event_id, event_type, partition_key, payload, headers, status)
-				VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+				query,
 				uuid.New(),
 				eventType,
 				fmt.Sprintf("user-%d", userID),
