@@ -1,11 +1,11 @@
 ---
 title: NATS Integration
-description: How to configure OpenOutbox Relay for NATS JetStream publishing.
+description: How to configure Open Outbox Relay for NATS JetStream publishing.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-OpenOutbox Relay supports **NATS JetStream** for persistent, reliable event delivery. This allows you to leverage NATS as a lightweight, high-performance message broker.
+Open Outbox Relay supports **NATS JetStream** for persistent, reliable event delivery. This allows you to leverage NATS as a lightweight, high-performance message broker.
 
 ## Core Configuration
 
@@ -21,7 +21,7 @@ To enable the NATS publisher, set the following environment variables.
 
 ## JetStream Requirement
 
-OpenOutbox Relay requires **NATS JetStream** to be enabled on your NATS cluster. The Relay publishes events to subjects, but those subjects must be backed by a Stream to ensure persistence.
+Open Outbox Relay requires **NATS JetStream** to be enabled on your NATS cluster. The Relay publishes events to subjects, but those subjects must be backed by a Stream to ensure persistence.
 
 <Aside type="danger" title="Manual Stream Provisioning">
 The Relay does **not** create or manage NATS Streams. You must create your Streams beforehand using the NATS CLI or API.

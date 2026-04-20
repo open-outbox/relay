@@ -5,12 +5,12 @@ description: How to use the Open Outbox CLI for pruning, maintenance, and operat
 
 import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
 
-To maintain peak performance, the outbox table must be periodically cleaned. The OpenOutbox Relay includes a
+To maintain peak performance, the outbox table must be periodically cleaned. The Open Outbox Relay includes a
 built-in CLI designed for maintenance, cleanup, and manual intervention.
 
 ## Scaling & Maintenance
 
-OpenOutbox is designed to handle tables with **millions of records** efficiently using standard indexes.
+Open Outbox is designed to handle tables with **millions of records** efficiently using standard indexes.
 However, regular maintenance is required to keep indexes lean and prevent database bloat.
 
 ### When to Consider Partitioning
@@ -19,7 +19,7 @@ billions of records**, standard `DELETE` operations will eventually become a bot
 
 At this scale, we recommend implementing **Table Partitioning** (e.g., by date) at the database level.
 This allows you to manage data by dropping old partitions rather than executing row-by-row deletions.
-Note that partition rotation must be managed externally, as OpenOutbox does not natively manage database partitions.
+Note that partition rotation must be managed externally, as Open Outbox does not natively manage database partitions.
 
 ## Pruning Historical Data
 
