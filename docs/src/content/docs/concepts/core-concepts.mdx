@@ -3,6 +3,12 @@ title: Core Concepts
 description: The fundamental building blocks of the Open Outbox ecosystem.
 ---
 
+import { Image } from 'astro:assets';
+import { Aside } from '@astrojs/starlight/components';
+import archDiagram from '../../../assets/open-outbox-architecture.svg';
+
+<Image src={archDiagram} alt="OpenOutbox Architecture Diagram" />
+
 Open Outbox Relay is a stateless bridge between your database and your infrastructure.
 It is built on three core pillars:
 
@@ -27,7 +33,41 @@ The **Relay** is the stateless worker. It handles three main loops:
 * **The Reaper:** A self-healing background task that finds "zombie" events (stuck in `DELIVERING` state)
 and resets them for a new attempt.
 
-### 4. The Event Lifecycle
+## 4. The Event Lifecycle
 
-Every event moves through a strict state machine:
-`PENDING` → `DELIVERING` → `DELIVERED` (or `DEAD` after max retries).
+Every event moves through a lifecycle managed by the **Poller**, the **Publisher**, and the **Reaper**.
+
+| State | Role | Description |
+| :--- | :--- | :--- |
+| **`PENDING`** | Waiting | The initial state or a state returned to after a failure or a "stalled" lease recovery. |
+| **`DELIVERING`** | Processing | The event is currently locked by a Relay and being sent to the broker. |
+| **`DELIVERED`** | **Final** | Success. The broker acknowledged the message. |
+| **`DEAD`** | **Final** | Failure. The event exceeded `RETRY_MAX_ATTEMPTS` or faced a non-retriable error and requires manual review. |
+
+---
+
+### State Transitions
+
+The movement between these states is governed by three specific actions:
+
+#### 1. The Claim (Poll)
+
+The Relay finds events that are `PENDING` (and ready based on `available_at`).
+It updates them to `DELIVERING` to start the work.
+
+#### 2. The Result (Publish)
+
+Once the Relay attempts to publish the event:
+* **Success**: The event is moved to the final **`DELIVERED`** state.
+* **Failure**: The `attempts` count increases. If it's below the limit, the event is moved back to **`PENDING`** with a backoff delay.
+If it hit the limit, or the error is not retryable, it is moved to the final **`DEAD`** state.
+
+#### 3. The Recovery (Reaper)
+If a Relay crashes while holding a batch, or the publishing takes longer than `LEASE_TIMEOUT`,
+those events stay stuck in **`DELIVERING`**. The **Reaper** identifies these "stale" leases and
+resets them to **`PENDING`** so another worker can try again.
+
+<Aside type="note">
+Once an event reaches a **Final Status** (`DELIVERED` or `DEAD`), it is no longer touched by the polling engine.
+These events stay in the table until your archival/cleanup policy removes them.
+</Aside>
