@@ -33,6 +33,7 @@ export default defineConfig({
                     items: [
                         { label: 'Deployment', link: '/guides/deployment' },
                         { label: 'Maintenance', link: '/guides/maintenance' },
+                        { label: 'Kafka', link: '/guides/kafka' },
                     ],
                 },
                 {

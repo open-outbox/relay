@@ -1,0 +1,95 @@
+---
+title: Kafka Integration
+description: How to configure OpenOutbox Relay for high-performance Apache Kafka publishing.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+OpenOutbox Relay bridges your database to **Apache Kafka** using a high-performance producer.
+It allows you to offload outbox events to Kafka topics with configurable durability and batching settings.
+
+## Core Configuration
+
+To enable the Kafka publisher, set the following environment variables.
+
+| Variable | Description | Example |
+| :--- | :--- | :--- |
+| `PUBLISHER_TYPE` | Must be set to `kafka`. | `kafka` |
+| `PUBLISHER_URL` | Comma-separated list of broker addresses. | `kafka://localhost:9092` |
+
+For more Kafka related configuration options please refer to
+[Kafka Configuration](/reference/configuration/#kafka-specific-configurations)
+
+---
+
+## Partitioning & Ordering
+
+The Relay maps the `partition_key` column from your database directly to the **Kafka Message Key**.
+
+<Aside type="caution" title="Ordering Disclaimer">
+While the `partition_key` ensures that messages for the same entity are routed to the same Kafka partition,
+**strict ordering is not currently guaranteed**.
+
+In high-concurrency environments or multi-relay clusters, race conditions during polling may result in events
+being published out of sequence. Strict ordered relaying is on the [Project Roadmap](/project/roadmap).
+</Aside>
+
+---
+
+## Reliability & Performance
+
+To guarantee **At-Least-Once** delivery, the Relay must wait for Kafka to confirm receipt before marking the
+database record as delivered.
+
+### Acknowledgments (`KAFKA_REQUIRED_ACKS`)
+
+This controls how many Kafka leader nodes must store the event before the Relay receives a "success" signal.
+
+* **`all` (Recommended):** The leader waits for all in-sync replicas to acknowledge. This is the only way to
+guarantee **zero data loss** during a broker failure.
+* **`one`:** The leader writes to its local log and responds immediately. Faster, but data could be lost if
+the leader crashes before replicating to others.
+* **`none`:** Fire-and-forget. The Relay does not wait for a response. **Do not use** if you require delivery guarantees.
+
+### Sync vs Async (`KAFKA_ASYNC`)
+This determines the internal execution flow of the Relay.
+
+* **`false` (Recommended):** The Relay waits for the Kafka ACK before returning to the database to mark the event
+as `DELIVERED`. This ensures the outbox and the broker are in sync.
+* **`true`:** The Relay hands the event to a background buffer and immediately tells the database the event is
+"delivered." This is much faster but **breaks At-Least-Once guarantees**, as a Relay crash could lose events
+currently sitting in the buffer.
+
+### Throughput vs. Batching
+
+There is a direct relationship between your reliability settings and the [`KAFKA_BATCH_SIZE`](/reference/configuration#kafka_batch_size).
+
+When running in **Synchronous mode** (`KAFKA_ASYNC=false`), the Relay waits for a broker acknowledgment before
+moving to the next event. In this mode, a large batch size can actually **decrease** performance because the
+producer waits to fill its buffer before sending the request.
+
+* **For Maximum Reliability:** Set `KAFKA_BATCH_SIZE=1`. This ensures every event is dispatched and acknowledged
+individually, providing the lowest latency per event in synchronous mode.
+* **For High Throughput:** If you prioritize volume over individual event latency, increase the batch size,
+but note that this works best when `KAFKA_ASYNC` is set to `true` (at the cost of delivery guarantees).
+
+```bash
+# Optimized for Synchronous "At-Least-Once" Throughput
+KAFKA_ASYNC=false
+KAFKA_BATCH_SIZE=1
+```
+
+## Connection Management
+
+### Topic Provisioning
+The Relay does not automatically create Kafka topics. Ensure your topics (matching the `event_type` in
+your database) are created beforehand, or that your Kafka brokers are configured with `auto.create.topics.enable=true`.
+
+### Timeouts and Retries
+In synchronous mode (`KAFKA_ASYNC=false`), a network hiccup can stall the Relay. Use the following to
+prevent "zombie" locks in your database:
+
+* [**`KAFKA_WRITE_TIMEOUT`**](/reference/configuration#kafka_write_timeout): Set this to a reasonable limit (e.g., `10s`). If Kafka doesn't ACK within
+this window, the Relay fails the operation, allowing the DB event to be retried later.
+* [**`RETRY_MAX_ATTEMPTS`**](/reference/configuration#retry_max_attempts): Control how many times the Relay tries to publish a single event before
+moving on or backing off.
