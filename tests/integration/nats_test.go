@@ -37,14 +37,7 @@ func TestNatsHappyPath(t *testing.T) {
 	di, err := container.BuildContainer(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, err)
-	defer db.Close()
-
-	require.NoError(t, err)
-	defer nc.Close()
-
 	js, err := nc.JetStream()
-	require.NoError(t, err)
 	_, err = js.AddStream(&nats_go.StreamConfig{
 		Name:     "OPENOUTBOX_EVENTS",
 		Subjects: []string{"openoutbox.events.>"},
