@@ -86,3 +86,39 @@ func TestNatsHappyPath(t *testing.T) {
 		return err == nil && status == "DELIVERED"
 	}, 2*time.Second, 100*time.Millisecond)
 }
+
+func TestNats_PublisherErrorHandling(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	db, pgConnStr := setupTestPostgres(t)
+	_, natsUrl := setupNats(t) // NATS is up, but we WON'T create a stream
+
+	t.Setenv("STORAGE_TYPE", "postgres")
+	t.Setenv("STORAGE_URL", pgConnStr)
+	t.Setenv("PUBLISHER_TYPE", "nats")
+	t.Setenv("PUBLISHER_URL", natsUrl)
+	t.Setenv("POLL_INTERVAL", "100ms")
+
+	di, _ := container.BuildContainer(ctx)
+
+	// Insert an event.
+	// Since we didn't call js.AddStream(), NATS will reject the publish.
+	eventID := uuid.New()
+	_, err := db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
+                       VALUES ($1, 'openoutbox.events.v1', '{}', 'PENDING')`, eventID)
+	require.NoError(t, err)
+
+	di.Invoke(func(engine *relay.Engine) { go engine.Start(ctx) })
+
+	// ASSERTION: The engine should increment 'attempts' because NATS returned an error
+	assert.Eventually(t, func() bool {
+		var attempts int
+		var status string
+		err := db.QueryRow("SELECT attempts, status FROM openoutbox_events WHERE event_id = $1", eventID).
+			Scan(&attempts, &status)
+
+		// We want to see attempts > 0 and status still PENDING (or DELIVERING)
+		return err == nil && attempts > 0
+	}, 5*time.Second, 200*time.Millisecond, "Engine should record failure when NATS reject publish")
+}
