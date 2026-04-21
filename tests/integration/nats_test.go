@@ -4,8 +4,6 @@ package integration
 
 import (
 	"context"
-	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/nats"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	dockercontainer "github.com/moby/moby/api/types/container"
@@ -28,21 +25,7 @@ func TestNatsHappyPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Start Postgres with your production schema script
-	schemaPath, _ := filepath.Abs("../../schema/postgres/open-outbox.sql")
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("outbox_db"),
-		postgres.WithUsername("user"),
-		postgres.WithPassword("pass"),
-		postgres.WithInitScripts(schemaPath),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(15*time.Second)),
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() { pgContainer.Terminate(context.Background()) })
+	db, pgConnStr := setupTestPostgres(t)
 
 	// Start NATS
 	natsContainer, err := nats.Run(ctx, "nats:2.10-alpine",
@@ -55,7 +38,6 @@ func TestNatsHappyPath(t *testing.T) {
 	t.Cleanup(func() { natsContainer.Terminate(context.Background()) })
 
 	// Setup Environment for config.Load()
-	pgConnStr, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	natsUrl, _ := natsContainer.ConnectionString(ctx)
 
 	t.Setenv("ENVIRONMENT", "production")
@@ -70,8 +52,6 @@ func TestNatsHappyPath(t *testing.T) {
 	di, err := container.BuildContainer(ctx)
 	require.NoError(t, err)
 
-	// Initialize helper clients for assertions
-	db, err := sql.Open("pgx", pgConnStr)
 	require.NoError(t, err)
 	defer db.Close()
 
