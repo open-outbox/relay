@@ -116,7 +116,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			p relay.Publisher,
 			cfg *config.Config,
 			tel telemetry.Telemetry,
-		) *relay.Engine {
+		) (*relay.Engine, error) {
 
 			retruPolicy := relay.ExponentialBackoff{
 				MaxAttempts: cfg.RetryMaxAttempts,

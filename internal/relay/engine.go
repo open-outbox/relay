@@ -64,10 +64,15 @@ func NewEngine(
 	publisher Publisher,
 	params EngineParams,
 	tel telemetry.Telemetry,
-) *Engine {
+) (*Engine, error) {
+
 	id := params.RelayID
 	if id == "" {
 		id = generateRelayID()
+	}
+
+	if params.BatchSize <= 0 {
+		return nil, fmt.Errorf("engine cannot poll with batch size 0")
 	}
 
 	return &Engine{
@@ -85,7 +90,7 @@ func NewEngine(
 		tracer:             tel.Tracer,
 		meter:              tel.Meter,
 		events:             make([]Event, params.BatchSize),
-	}
+	}, nil
 }
 
 // Start initiates the relay's operational loops in the background.

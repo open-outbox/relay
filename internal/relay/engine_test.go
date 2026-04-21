@@ -11,6 +11,7 @@ import (
 	"github.com/open-outbox/relay/internal/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -161,17 +162,18 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		Metrics: metrics,
 	}
 
-	e := NewEngine(
+	e, err := NewEngine(
 		mockStorage,
 		mockPublisher,
 		params,
 		tm,
 	)
+	require.NoError(t, err, "Failed to initialize engine")
 
-	// 4. Execution
+	// Execution
 	_, err = e.process(context.Background())
 
-	// 5. Assertions
+	// Assertions
 	assert.NoError(t, err)
 	mockStorage.AssertExpectations(t)
 	mockPublisher.AssertExpectations(t)
@@ -188,19 +190,19 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	buffer := make([]Event, 2)
 	ctx := context.Background()
 
-	// 1. Return BOTH events
+	// Return BOTH events
 	mockStorage.On("ClaimBatch", mock.Anything, relayID, 2, buffer).
 		Return([]Event{event1, event2}, nil)
 
-	// 2. Event 1: Publish Success
+	// Event 1: Publish Success
 	mockPublisher.On("Publish", mock.Anything, event1).
 		Return(nil)
 
-	// 3. Event 2: Publish Failure
+	// Event 2: Publish Failure
 	mockPublisher.On("Publish", mock.Anything, event2).
 		Return(errors.New("network error"))
 
-	// 4. Verify BOTH storage updates happen
+	// Verify BOTH storage updates happen
 	// Success side:
 	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, relayID).
 		Return(nil)
@@ -212,7 +214,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		Return(nil)
 
 	// Initialize & Run
-	// 3. Initialize Engine
+	// Initialize Engine
 	// (Using no-op providers for metrics/tracing to keep it simple)
 	metrics, err := telemetry.NewMetrics(metricnoop.NewMeterProvider())
 	assert.NoError(t, err)
@@ -239,12 +241,14 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		Metrics: metrics,
 	}
 
-	e := NewEngine(
+	e, err := NewEngine(
 		mockStorage,
 		mockPublisher,
 		params,
 		tm,
 	)
+	require.NoError(t, err, "Failed to initialize engine")
+
 	_, err = e.process(ctx)
 
 	assert.NoError(t, err)

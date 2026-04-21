@@ -182,6 +182,10 @@ func (p *Postgres) ClaimBatch(
 	buf []relay.Event,
 ) ([]relay.Event, error) {
 
+	if batchSize <= 0 {
+		return nil, nil
+	}
+
 	rows, err := p.pool.Query(ctx, p.queryClaimBatch,
 		relay.StatusPending,
 		batchSize,
