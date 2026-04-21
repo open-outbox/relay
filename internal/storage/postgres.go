@@ -86,17 +86,17 @@ const (
         WITH stuck_events AS (
             SELECT event_id
             FROM {{TABLE}}
-            WHERE status = 'DELIVERING'
+            WHERE status = $1
 				AND (
-					locked_at < (now() - $1::interval)
+					locked_at < (now() - $2::interval)
 					OR locked_at IS NULL
 				)
             ORDER BY locked_at ASC
-            LIMIT $2
+            LIMIT $3
             FOR UPDATE SKIP LOCKED
         )
         UPDATE {{TABLE}}
-        SET status = 'PENDING',
+        SET status = $4,
             locked_by = NULL,
             locked_at = NULL
         FROM stuck_events
@@ -104,9 +104,9 @@ const (
     `
 	sqlStats = `
         SELECT
-            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status='PENDING'), 0)::bigint,
+            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status=$1), 0)::bigint,
             COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at)
-				FROM {{TABLE}} WHERE status='PENDING'))), 0)::bigint
+				FROM {{TABLE}} WHERE status=$1))), 0)::bigint
 	`
 	sqlPruneStats = `
 		SELECT
@@ -308,8 +308,10 @@ func (p *Postgres) ReapExpiredLeases(
 	result, err := p.pool.Exec(
 		ctx,
 		p.queryReapExpiredLeases,
+		relay.StatusDelivering,
 		durationToInterval(leaseTimeout),
 		limit,
+		relay.StatusPending,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to reap expired leases: %w", err)
@@ -323,7 +325,7 @@ func (p *Postgres) ReapExpiredLeases(
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
-	err := p.pool.QueryRow(ctx, p.queryStats).Scan(
+	err := p.pool.QueryRow(ctx, p.queryStats, relay.StatusPending).Scan(
 		&stats.PendingCount,
 		&stats.OldestAgeSec,
 	)
