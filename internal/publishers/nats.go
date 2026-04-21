@@ -75,8 +75,10 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 
 	msg.Header.Set("Nats-Msg-Id", event.ID.String())
 
-	if event.PartitionKey != "" {
-		msg.Header.Set("X-Partition-Key", event.PartitionKey)
+	pkey := event.GetPartitionKey()
+
+	if pkey != "" {
+		msg.Header.Set("X-Partition-Key", pkey)
 	}
 
 	pubCtx, cancel := context.WithTimeout(ctx, n.publishTimeout)

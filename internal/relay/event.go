@@ -36,7 +36,7 @@ type Event struct {
 	// Type defines the subject/topic the message should be published to.
 	Type string `db:"event_type"    json:"type"`
 	// PartitionKey is used for load balancing on the broker side if supported
-	PartitionKey string `db:"partition_key" json:"partition_key"`
+	PartitionKey *string `db:"partition_key" json:"partition_key"`
 	// Payload is the raw message body.
 	Payload []byte `db:"payload"       json:"payload"`
 	// Headers is a JSON blob containing custom message attributes/headers.
@@ -47,6 +47,16 @@ type Event struct {
 
 	// CreatedAt is the timestamp when the event was first inserted into the database.
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+// GetPartitionKey safely dereferences the optional PartitionKey.
+// It returns the value if present, or an empty string if the value was NULL in the database.
+// This prevents nil-pointer panics when publishers access the key.
+func (e Event) GetPartitionKey() string {
+	if e.PartitionKey == nil {
+		return ""
+	}
+	return *e.PartitionKey
 }
 
 // FailedEvent is a container used to report processing failures back to the storage layer.

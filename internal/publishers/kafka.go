@@ -124,8 +124,11 @@ func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 // downstream deduplication.
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	var kafkaKey []byte
-	if event.PartitionKey != "" {
-		kafkaKey = []byte(event.PartitionKey)
+
+	pKey := event.GetPartitionKey()
+
+	if pKey != "" {
+		kafkaKey = []byte(pKey)
 	}
 
 	var userHeaders map[string]string
