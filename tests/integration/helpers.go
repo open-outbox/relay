@@ -12,8 +12,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	dockercontainer "github.com/moby/moby/api/types/container"
 	nats_go "github.com/nats-io/nats.go"
+	kafka_go "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/testcontainers/testcontainers-go/modules/nats"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -70,4 +72,40 @@ func setupNats(t *testing.T) (*nats_go.Conn, string) {
 	require.NoError(t, err)
 
 	return nc, url
+}
+
+func setupKafka(t *testing.T, topic string) string {
+	t.Helper()
+	ctx := context.Background()
+
+	// The official module handles the "Advertised Listener" logic for you
+	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		kafkaContainer.Terminate(ctx)
+	})
+
+	// This returns the correctly mapped localhost:PORT
+	brokers, err := kafkaContainer.Brokers(ctx)
+	require.NoError(t, err)
+	broker := brokers[0]
+
+	// Create topic
+	createKafkaTopic(t, broker, topic)
+
+	return broker
+}
+
+func createKafkaTopic(t *testing.T, broker string, topic string) {
+	conn, err := kafka_go.Dial("tcp", broker)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	err = conn.CreateTopics(kafka_go.TopicConfig{
+		Topic:             topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	})
+	require.NoError(t, err)
 }
