@@ -32,8 +32,10 @@ func TestRetryPolicy_NextBackoff(t *testing.T) {
 		// Attempt 5: 2^4 * 1s = 16s, but MaxDelay is 10s
 		delay, retry := policy.NextBackoff(5)
 		assert.True(t, retry, "Should still retry on attempt 5")
-		// MaxDelay is 10s. Jitter is 10% of 10s (1s). Max possible is 11s.
-		assert.LessOrEqual(t, delay, 11*time.Second+100*time.Millisecond)
+
+		// Calculation: MaxDelay (10s) + (Jitter 0.15 * MaxDelay) = 11.5s max possible.
+		// We use 11.6s to provide a safe buffer for floating point precision.
+		assert.LessOrEqual(t, delay, 11*time.Second+600*time.Millisecond)
 		assert.GreaterOrEqual(t, delay, 10*time.Second)
 	})
 
