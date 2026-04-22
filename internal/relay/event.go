@@ -23,11 +23,6 @@ const (
 	StatusDead Status = "DEAD"
 )
 
-// IsTerminal returns true if the status represents a final state for the event.
-func (s Status) IsTerminal() bool {
-	return s == StatusDelivered || s == StatusDead
-}
-
 // Event represents a single unit of work from the outbox table.
 // It contains the message payload, metadata for routing, and delivery tracking information.
 type Event struct {
