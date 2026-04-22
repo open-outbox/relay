@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/storage"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -29,6 +30,10 @@ func TestPostgresStorage(t *testing.T) {
 	store, err := storage.NewPostgres(pool, tableName, logger)
 	require.NoError(t, err)
 	defer store.Close(ctx)
+
+	// Ping the connection
+	err = store.Ping(ctx)
+	assert.NoError(t, err)
 
 	// Truncate
 	truncate := func() {
