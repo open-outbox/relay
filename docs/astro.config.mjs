@@ -26,6 +26,7 @@ export default defineConfig({
                     items: [
                         { label: 'Introduction', link: '/tutorial/introduction' },
                         { label: 'Quick Start', link: '/tutorial/quick-start' },
+                        { label: 'Observability', link: '/tutorial/observability' },
                     ],
                 },
                 {

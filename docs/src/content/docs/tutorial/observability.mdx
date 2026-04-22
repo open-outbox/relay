@@ -1,0 +1,61 @@
+---
+title: Observability Quickstart
+description: How to visualize Open Outbox metrics and traces using OTel, Jaeger, and Prometheus.
+---
+
+import { Steps, Aside, FileTree } from '@astrojs/starlight/components';
+
+# Observability Quickstart
+
+Open Outbox uses **OpenTelemetry (OTLP)** to push metrics and traces. Instead of building a custom dashboard, we provide standard configurations to plug into industry-standard tools.
+
+<Aside type="tip">
+  We provide ready-to-use configurations in the repository for local testing and reference.
+</Aside>
+
+<FileTree>
+- deployments/
+  - infra-docker-compose.yaml
+- configs/
+  - otel/
+    - otel-collector-config.yaml
+  - prometheus/
+    - prometheus.yaml
+</FileTree>
+
+## Local Setup
+
+The fastest way to see the Relay in action is to spin up the observability stack alongside it using Docker Compose.
+
+<Steps>
+1.  **Start the Stack** Run the provided compose file to spin up the OTel Collector, Jaeger (traces), and Prometheus (metrics):
+    ```bash
+    docker-compose -f deployments/infra-docker-compose.otel.yml up -d
+    ```
+
+2.  **Configure the Relay** Point the Relay to the local OTel Collector by setting these environment variables:
+    ```bash
+    OTEL_METRICS_EXPORTER=otlp
+    OTEL_TRACES_EXPORTER=otlp
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+    ```
+
+3.  **View Traces** Open **Jaeger** at `http://localhost:16686`. You will see traces showing the full event lifecycle:
+    `claimBatch` → `publish` → `markDelivered`.
+
+4.  **View Metrics** Open **Prometheus** at `http://localhost:9090` to see counters for published events and current backlog age.
+</Steps>
+
+---
+
+## Production Best Practices
+
+In a production environment, you should follow the **Collector-as-a-Sidecar** pattern:
+
+* **Don't point directly to the cloud:** Do not point the Relay directly at Datadog, Honeycomb, or New Relic.
+* **Use the Collector:** Point the Relay to an OpenTelemetry Collector running on the same host or in the same pod.
+* **Why?** The Collector handles batching, retries, and network issues. If your monitoring backend goes down, the Collector buffers the data so the Relay doesn't slow down or crash.
+
+## Configuration Reference
+
+For a full list of available metrics and trace attributes, check the [Diagnostics Reference](/reference/diagnostics).
