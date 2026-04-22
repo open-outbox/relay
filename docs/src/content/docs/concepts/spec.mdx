@@ -1,0 +1,71 @@
+---
+title: The Specification
+description: The universal contract for Transactional Outbox events.
+sidebar:
+  order: 1
+---
+
+import { Aside, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Open Outbox Specification
+
+<Aside type="caution" title="DRAFT STATUS">
+  This specification is currently in a **Draft** phase. The schema and protocol
+  definitions are subject to change as we move toward a stable 1.0 standard.
+  <Badge text="v0.1.0-draft" variant="caution" size="medium" />
+</Aside>
+
+## The Goal
+
+The **Open Outbox Specification** defines a universal, language-agnostic contract for the Transactional Outbox pattern.
+
+In microservice architectures, the database outbox table is the critical "handshake" between your
+application logic and your message infrastructure. We believe this handshake should be standardized so
+that your choice of programming language doesn't dictate your infrastructure's reliability.
+
+### Core Objectives
+
+<CardGrid>
+  <Card title="Interoperability" icon="rocket">
+    A Go-based relay can process an outbox table populated by Python, Node.js, or Java apps without custom configuration.
+  </Card>
+  <Card title="Reliability" icon="approve-check">
+    Mandates fields for idempotency (`event_id`), controlled retries (`available_at`), and state tracking.
+  </Card>
+  <Card title="Broker Affinity" icon="random">
+    Includes a `partition_key` field to ensure the target broker can maintain strict ordering and load balancing.
+  </Card>
+  <Card title="Agnostic" icon="setting">
+    Works across different databases (Postgres, MySQL) and brokers (Kafka, NATS, Webhooks).
+  </Card>
+</CardGrid>
+
+---
+
+## Why Standardize?
+
+Most outbox setups are just custom code glued to a specific framework. By using a standard schema,
+teams can stop wasting time rebuilding the same polling loops, database locking, and retry logic from scratch.
+
+Open Outbox moves this complexity into a shared standard. This allows developers to focus on
+**publishing events**, while the relay handles the heavy lifting of "at-least-once" delivery.
+
+## Formal Specification
+
+The formal technical documentation—including strict SQL schema definitions, state transition diagrams,
+and metadata requirements—is maintained in a dedicated repository.
+
+:::tip[Explore the Standard]
+You can find the detailed technical requirements and contribution guidelines in the official spec repo:
+
+**[github.com/open-outbox/spec](https://github.com/open-outbox/spec)**
+:::
+
+---
+
+## Roadmap to Stable Spec
+
+- [x] **Core Schema Definition** (Postgres Reference)
+- [ ] **State Machine Formalization** (Handling `PENDING`, `DELIVERING`, `DEAD`)
+- [ ] **Ordering & Partitioning Extensions**
+- [ ] **Multi-Database Dialects** (MySQL, SQL Server, MongoDB)

@@ -58,6 +58,7 @@ export default defineConfig({
                         { label: 'Table Schema', link: '/concepts/table-schema' },
                         { label: 'Delivery Guarantees', link: '/concepts/delivery-guarantees' },
                         { label: 'Event Ordering', link: '/concepts/event-ordering' },
+                        { label: 'Specification', link: '/concepts/spec' },
 
                     ],
                 },
