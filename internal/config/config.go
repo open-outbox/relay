@@ -112,6 +112,11 @@ type Config struct {
 	//	Default: "5s"
 	RedisConnectionTimeout time.Duration `mapstructure:"REDIS_CONNECTION_TIMEOUT"`
 
+	// RedisWriteTimeout is the maximum time allowed for each write operation (XADD)
+	// to complete during the engine loop.
+	// Default: "1s"
+	RedisWriteTimeout time.Duration `mapstructure:"REDIS_WRITE_TIMEOUT"`
+
 	// KafkaMaxAttempts is the number of write attempts...
 	//	Default: 5
 	KafkaMaxAttempts int `mapstructure:"KAFKA_MAX_ATTEMPTS"`
@@ -204,6 +209,7 @@ func Load() (*Config, error) {
 
 	//Redis Relay-Optimized Defaults
 	v.SetDefault("REDIS_CONNECTION_TIMEOUT", "5s")
+	v.SetDefault("REDIS_WRITE_TIMEOUT", "1s")
 
 	// Kafka Relay-Optimized Defaults
 	// We set KAFKA_BATCH_SIZE to 1. Since our Relay Engine already batches

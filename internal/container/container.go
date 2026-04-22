@@ -98,7 +98,11 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return buildKafkaPublisher(*cfg)
 
 			case "redis":
-				return publishers.NewRedis(cfg.PublisherURL, cfg.RedisConnectionTimeout)
+				return publishers.NewRedis(
+					cfg.PublisherURL,
+					cfg.RedisConnectionTimeout,
+					cfg.RedisWriteTimeout,
+				)
 
 			case "stdout":
 				return publishers.NewStdout(), nil

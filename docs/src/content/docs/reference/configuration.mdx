@@ -227,6 +227,30 @@ The maximum amount of time the Relay will wait for an acknowledgment from the NA
 
 ---
 
+## Redis Specific Configurations
+
+These settings only apply when `PUBLISHER_TYPE="redis"`.
+
+---
+
+### `REDIS_CONNECTION_TIMEOUT`
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: `5s`
+
+The maximum amount of time allowed for the initial connectivity check (Ping) when the Relay service starts. If the Relay cannot reach Redis within this window, the service will fail to start.
+
+---
+
+### `REDIS_WRITE_TIMEOUT`
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: `1s`
+
+The maximum time allowed for each write operation (`XADD`) to the Redis stream. This prevents a slow or lagging Redis instance from hanging the entire engine processing loop.
+
+---
+
 
 ## Kafka Specific Configurations
 

@@ -22,11 +22,18 @@ type Redis struct {
 // NewRedis establishes a connection to a Redis server.
 // It validates the connection with a Ping before returning.
 // It accepts redis URLs like "redis://<user>:<pass>@localhost:6379/0" .
-func NewRedis(url string, connectionTimeout time.Duration) (*Redis, error) {
+func NewRedis(
+	url string,
+	writeTimeout time.Duration,
+	connectionTimeout time.Duration,
+) (*Redis, error) {
 	opts, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("invalid redis url: %w", err)
 	}
+
+	opts.WriteTimeout = writeTimeout
+	opts.ReadTimeout = writeTimeout
 
 	client := redis.NewClient(opts)
 
