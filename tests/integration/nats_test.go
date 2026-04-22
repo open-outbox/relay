@@ -59,6 +59,13 @@ func TestNatsHappyPath(t *testing.T) {
 		eventID, "openoutbox.events.v1", payload)
 	require.NoError(t, err)
 
+	err = di.Invoke(func(pub relay.Publisher) {
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		assert.NoError(t, pub.Ping(pingCtx), "Publisher Ping method should be covered and pass")
+	})
+	require.NoError(t, err)
+
 	// Start the Engine through DI
 	err = di.Invoke(func(engine *relay.Engine) {
 		go func() {

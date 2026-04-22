@@ -31,6 +31,13 @@ func TestKafkaHappyPath(t *testing.T) {
 	t.Setenv("POLL_INTERVAL", "100ms")
 
 	di, _ := container.BuildContainer(ctx)
+	err := di.Invoke(func(pub relay.Publisher) {
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		assert.NoError(t, pub.Ping(pingCtx), "Publisher Ping method should be covered and pass")
+	})
+	require.NoError(t, err)
+
 	di.Invoke(func(engine *relay.Engine) {
 		go engine.Start(ctx)
 	})
@@ -47,7 +54,7 @@ func TestKafkaHappyPath(t *testing.T) {
 
 	eventID := uuid.New()
 	payload := []byte(`{"type":"kafka-test"}`)
-	_, err := db.Exec(
+	_, err = db.Exec(
 		`INSERT INTO openoutbox_events (event_id, event_type, payload) VALUES ($1, $2, $3)`,
 		eventID,
 		topic,
