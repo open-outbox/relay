@@ -221,10 +221,11 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	var failedEvents []FailedEvent
 
 	if e.enableBatchPublish {
-		successIDs, failedEvents, err = e.publishBatch(ctx, events)
-	} else {
-		successIDs, failedEvents, err = e.publishOnByOne(ctx, events)
+		// successIDs, failedEvents, err = e.publishBatch(ctx, events)
+		return 0, fmt.Errorf("batch publishing is not enabled yet")
 	}
+
+	successIDs, failedEvents, err = e.publishOnByOne(ctx, events)
 
 	if err != nil {
 		return 0, err
@@ -384,41 +385,41 @@ func (e *Engine) publishOnByOne(
 	return successEvents, failedEvents, nil
 }
 
-func (e *Engine) publishBatch(
-	ctx context.Context,
-	events []Event,
-) ([]uuid.UUID, []FailedEvent, error) {
+// func (e *Engine) publishBatch(
+// 	ctx context.Context,
+// 	events []Event,
+// ) ([]uuid.UUID, []FailedEvent, error) {
 
-	// err := e.publisher.PublishBatch(ctx, events)
-	err := fmt.Errorf("batch publishing is not enabled yet")
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, nil, err
-		}
+// 	// err := e.publisher.PublishBatch(ctx, events)
+// 	err := fmt.Errorf("batch publishing is not enabled yet")
+// 	if err != nil {
+// 		if errors.Is(err, context.Canceled) {
+// 			return nil, nil, err
+// 		}
 
-		failures := make([]FailedEvent, 0, len(events))
-		for _, ev := range events {
-			failures = append(failures, e.assessFailure(ev, err))
-		}
+// 		failures := make([]FailedEvent, 0, len(events))
+// 		for _, ev := range events {
+// 			failures = append(failures, e.assessFailure(ev, err))
+// 		}
 
-		e.metrics.EventsTotal.Add(ctx, int64(len(events)),
-			metric.WithAttributes(attribute.String("status", "failed")))
+// 		e.metrics.EventsTotal.Add(ctx, int64(len(events)),
+// 			metric.WithAttributes(attribute.String("status", "failed")))
 
-		return nil, failures, nil
-	}
+// 		return nil, failures, nil
+// 	}
 
-	successIDs := make([]uuid.UUID, 0, len(events))
-	for _, ev := range events {
-		successIDs = append(successIDs, ev.ID)
-		e.metrics.EndToEndLatency.Record(ctx, time.Since(ev.CreatedAt).Seconds(),
-			metric.WithAttributes(attribute.String("type", ev.Type)))
-	}
+// 	successIDs := make([]uuid.UUID, 0, len(events))
+// 	for _, ev := range events {
+// 		successIDs = append(successIDs, ev.ID)
+// 		e.metrics.EndToEndLatency.Record(ctx, time.Since(ev.CreatedAt).Seconds(),
+// 			metric.WithAttributes(attribute.String("type", ev.Type)))
+// 	}
 
-	e.metrics.EventsTotal.Add(ctx, int64(len(events)),
-		metric.WithAttributes(attribute.String("status", "success")))
+// 	e.metrics.EventsTotal.Add(ctx, int64(len(events)),
+// 		metric.WithAttributes(attribute.String("status", "success")))
 
-	return successIDs, nil, nil
-}
+// 	return successIDs, nil, nil
+// }
 
 func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 	nextAttempts := event.Attempts + 1
