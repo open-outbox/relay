@@ -26,33 +26,35 @@ const (
 // and ensures that events are processed according to the configured batching
 // and retry policies.
 type Engine struct {
-	relayID            string
-	storage            Storage
-	publisher          Publisher
-	interval           time.Duration
-	leaseTimeout       time.Duration
-	reapBatchSize      int
-	batchSize          int
-	enableBatchPublish bool
-	policy             RetryPolicy
-	logger             *zap.Logger
-	metrics            *telemetry.Metrics
-	tracer             trace.Tracer
-	meter              metric.Meter
-	events             []Event
+	relayID                       string
+	storage                       Storage
+	publisher                     Publisher
+	interval                      time.Duration
+	leaseTimeout                  time.Duration
+	reapBatchSize                 int
+	batchSize                     int
+	publisherConnectRetryInterval time.Duration
+	enableBatchPublish            bool
+	policy                        RetryPolicy
+	logger                        *zap.Logger
+	metrics                       *telemetry.Metrics
+	tracer                        trace.Tracer
+	meter                         metric.Meter
+	events                        []Event
 }
 
 // EngineParams handles the tuning and identity.
 // It encapsulates all the operational parameters required to initialize
 // and configure the relay engine's behavior.
 type EngineParams struct {
-	RelayID            string
-	Interval           time.Duration
-	BatchSize          int
-	LeaseTimeout       time.Duration
-	ReapBatchSize      int
-	RetryPolicy        RetryPolicy
-	EnableBatchPublish bool
+	RelayID                       string
+	Interval                      time.Duration
+	BatchSize                     int
+	LeaseTimeout                  time.Duration
+	ReapBatchSize                 int
+	PublisherConnectRetryInterval time.Duration
+	RetryPolicy                   RetryPolicy
+	EnableBatchPublish            bool
 }
 
 // NewEngine initializes and returns a new Engine instance.
@@ -76,20 +78,21 @@ func NewEngine(
 	}
 
 	return &Engine{
-		relayID:            id,
-		storage:            storage,
-		publisher:          publisher,
-		interval:           params.Interval,
-		batchSize:          params.BatchSize,
-		leaseTimeout:       params.LeaseTimeout,
-		reapBatchSize:      params.ReapBatchSize,
-		enableBatchPublish: params.EnableBatchPublish,
-		policy:             params.RetryPolicy,
-		logger:             tel.ScopedLogger("engine"),
-		metrics:            tel.Metrics,
-		tracer:             tel.Tracer,
-		meter:              tel.Meter,
-		events:             make([]Event, params.BatchSize),
+		relayID:                       id,
+		storage:                       storage,
+		publisher:                     publisher,
+		interval:                      params.Interval,
+		batchSize:                     params.BatchSize,
+		leaseTimeout:                  params.LeaseTimeout,
+		reapBatchSize:                 params.ReapBatchSize,
+		publisherConnectRetryInterval: params.PublisherConnectRetryInterval,
+		enableBatchPublish:            params.EnableBatchPublish,
+		policy:                        params.RetryPolicy,
+		logger:                        tel.ScopedLogger("engine"),
+		metrics:                       tel.Metrics,
+		tracer:                        tel.Tracer,
+		meter:                         tel.Meter,
+		events:                        make([]Event, params.BatchSize),
 	}, nil
 }
 
@@ -100,6 +103,30 @@ func NewEngine(
 // 3. The main event processing loop that moves messages from storage to the publisher.
 // It blocks until the context is cancelled or a critical error occurs.
 func (e *Engine) Start(ctx context.Context) error {
+
+	// Ensure the publisher is ready before doing anything else.
+	for {
+		e.logger.Info("attempting to connect to publisher...",
+			zap.String("relay_id", e.relayID))
+
+		err := e.publisher.Connect(ctx)
+		if err == nil {
+			e.logger.Info("connected to publisher")
+			break
+		}
+
+		e.logger.Warn("publisher is not ready, retrying...",
+			zap.Error(err),
+			zap.Duration("retry_interval", e.publisherConnectRetryInterval))
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(e.publisherConnectRetryInterval):
+			continue
+		}
+	}
+
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return e.watchBacklog(gCtx)

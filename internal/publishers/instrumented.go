@@ -37,6 +37,12 @@ func NewInstrumentedPublisher(p relay.Publisher, tel telemetry.Telemetry) *Instr
 	}
 }
 
+// Connect establishes the connection to the underlying message broker.
+// can initialize the connection through the instrumentation layer.
+func (ip *InstrumentedPublisher) Connect(ctx context.Context) error {
+	return ip.publisher.Connect(ctx)
+}
+
 // Publish wraps the underlying publisher's Publish method. It creates a new
 // trace span, records the start time for latency metrics, and captures any
 // errors. It ensures that delivery metrics include both the event type and

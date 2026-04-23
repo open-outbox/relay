@@ -16,6 +16,13 @@ func NewNull() *Null {
 	return &Null{}
 }
 
+// Connect satisfies the relay.Publisher interface.
+// For the Null publisher, this is a no-op that always reports success,
+// allowing the engine to start immediately without a physical broker.
+func (n *Null) Connect(_ context.Context) error {
+	return nil
+}
+
 // Publish satisfies the relay.Publisher interface.
 // It effectively "black holes" the event and immediately reports success.
 func (n *Null) Publish(_ context.Context, _ relay.Event) error {

@@ -92,7 +92,11 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		func(cfg *config.Config) (relay.Publisher, error) {
 			switch cfg.PublisherType {
 			case "nats":
-				return publishers.NewNats(cfg.PublisherURL, cfg.NatsPublishTimeout)
+				return publishers.NewNats(
+					cfg.PublisherURL,
+					cfg.NatsPublishTimeout,
+					cfg.NatsConnectionTimeout,
+				)
 
 			case "kafka":
 				return buildKafkaPublisher(*cfg)
@@ -130,12 +134,13 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			}
 
 			params := relay.EngineParams{
-				RelayID:       cfg.RelayID,
-				Interval:      cfg.PollInterval,
-				BatchSize:     cfg.BatchSize,
-				LeaseTimeout:  cfg.LeaseTimeout,
-				ReapBatchSize: cfg.ReapBatchSize,
-				RetryPolicy:   retruPolicy,
+				RelayID:                       cfg.RelayID,
+				Interval:                      cfg.PollInterval,
+				BatchSize:                     cfg.BatchSize,
+				LeaseTimeout:                  cfg.LeaseTimeout,
+				ReapBatchSize:                 cfg.ReapBatchSize,
+				PublisherConnectRetryInterval: cfg.PublisherConnectRetryInterval,
+				RetryPolicy:                   retruPolicy,
 			}
 
 			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel)
@@ -182,6 +187,14 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, fmt.Errorf("unsupported Kafka Compression type: %s", cfg.KafkaCompression)
 	}
 
+	brokerList := strings.Split(strings.TrimPrefix(cfg.PublisherURL, "kafka://"), ",")
+
+	if len(brokerList) < 1 || (len(brokerList) == 1 && brokerList[0] == "") {
+		return nil, fmt.Errorf(
+			"failed to create publisher: no broker addresses provided for kafka publisher",
+		)
+	}
+
 	// Required Acks Mapping
 	// We allow both human-readable strings and common string-integers
 	acksMap := map[string]kafka.RequiredAcks{
@@ -200,16 +213,17 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 	}
 
 	kCfg := publishers.KafkaConfig{
-		Brokers:      cfg.PublisherURL,
-		MaxAttempts:  cfg.KafkaMaxAttempts,
-		WriteTimeout: cfg.KafkaWriteTimeout,
-		ReadTimeout:  cfg.KafkaReadTimeout,
-		BatchSize:    cfg.KafkaBatchSize,
-		BatchBytes:   cfg.KafkaBatchBytes,
-		BatchTimeout: cfg.KafkaBatchTimeout,
-		Async:        cfg.KafkaAsync,
-		RequiredAcks: acks,
-		Compression:  comp,
+		Brokers:           brokerList,
+		MaxAttempts:       cfg.KafkaMaxAttempts,
+		WriteTimeout:      cfg.KafkaWriteTimeout,
+		ReadTimeout:       cfg.KafkaReadTimeout,
+		ConnectionTimeout: cfg.KafkaConnectionTimeout,
+		BatchSize:         cfg.KafkaBatchSize,
+		BatchBytes:        cfg.KafkaBatchBytes,
+		BatchTimeout:      cfg.KafkaBatchTimeout,
+		Async:             cfg.KafkaAsync,
+		RequiredAcks:      acks,
+		Compression:       comp,
 	}
-	return publishers.NewKafka(kCfg), nil
+	return publishers.NewKafka(kCfg)
 }

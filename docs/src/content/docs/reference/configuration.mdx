@@ -150,6 +150,15 @@ The number of expired leases the cleanup engine will reset back to `PENDING` in 
 
 ---
 
+### `PUBLISHER_CONNECT_RETRY_INTERVAL`
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 5s
+
+The amount of time the engine waits between failed attempts to establish the initial connection to the message broker (NATS, Kafka, or Redis) during the startup phase.
+
+---
+
 ### `SERVER_PORT`
 
 <Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>
@@ -224,6 +233,15 @@ Default: 5s
 
 The maximum amount of time the Relay will wait for an acknowledgment from the NATS server
 (or JetStream) before timing out the request.
+
+---
+
+### `NATS_CONNECTION_TIMEOUT`
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 10s
+
+The deadline for the initial TCP handshake and protocol negotiation with the NATS server.
 
 ---
 
@@ -352,6 +370,15 @@ The maximum time to wait for a successful write acknowledgment from the Kafka br
 **Default:** `10s`
 
 The maximum time to wait for a response when reading from the Kafka broker (e.g., during metadata updates).
+
+---
+
+### `KAFKA_CONNECTION_TIMEOUT`
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 10s
+
+The maximum time allowed to establish the initial TCP connection and perform the metadata exchange with the Kafka brokers before the engine reports a connection failure.
 
 ---
 

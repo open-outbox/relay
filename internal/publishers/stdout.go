@@ -18,6 +18,13 @@ func NewStdout() *Stdout {
 	return &Stdout{}
 }
 
+// Connect satisfies the relay.Publisher interface.
+// For the Stdout publisher, this is a no-op that always reports success,
+// as the standard output stream is assumed to be available at runtime.
+func (s *Stdout) Connect(_ context.Context) error {
+	return nil
+}
+
 // Publish satisfies the relay.Publisher interface.
 // It formats the event as a string and writes it to standard output.
 func (s *Stdout) Publish(_ context.Context, event relay.Event) error {

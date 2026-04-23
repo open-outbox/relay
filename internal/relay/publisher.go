@@ -24,6 +24,12 @@ func (e *PublishError) Unwrap() error { return e.Err }
 // It abstracts the specifics of message brokers (Kafka, NATS, Redis, etc.)
 // providing a unified contract for the Relay Engine.
 type Publisher interface {
+
+	// Connect establishes the initial connection to the message broker.
+	// It should perform handshakes, authenticate, and initialize necessary
+	// resources (like NATS JetStream contexts or Kafka writers).
+	Connect(ctx context.Context) error
+
 	// Publish sends a single event to the downstream system.
 	// It should block until the broker provides a delivery acknowledgment
 	// or the provided context is cancelled.

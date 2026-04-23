@@ -112,6 +112,7 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	err = di.Invoke(func(pub relay.Publisher) {
+		pub.Connect(ctx)
 		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		assert.NoError(t, pub.Ping(pingCtx), "Publisher Ping method should be covered and pass")

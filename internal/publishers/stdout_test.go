@@ -25,6 +25,7 @@ func TestStdoutPublisher(t *testing.T) {
 	})
 
 	t.Run("Lifecycle", func(t *testing.T) {
+		assert.NoError(t, pub.Connect(ctx))
 		assert.NoError(t, pub.Ping(ctx))
 		assert.NoError(t, pub.Close(ctx))
 	})

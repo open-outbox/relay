@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
@@ -20,22 +19,24 @@ import (
 // to ensure the relay's internal batching logic remains the primary
 // driver of delivery frequency.
 type KafkaConfig struct {
-	Brokers      string
-	MaxAttempts  int
-	WriteTimeout time.Duration
-	ReadTimeout  time.Duration
-	BatchSize    int
-	BatchBytes   int64
-	BatchTimeout time.Duration
-	Async        bool
-	Compression  kafka.Compression
-	RequiredAcks kafka.RequiredAcks
+	Brokers           []string
+	MaxAttempts       int
+	WriteTimeout      time.Duration
+	ReadTimeout       time.Duration
+	ConnectionTimeout time.Duration
+	BatchSize         int
+	BatchBytes        int64
+	BatchTimeout      time.Duration
+	Async             bool
+	Compression       kafka.Compression
+	RequiredAcks      kafka.RequiredAcks
 }
 
 // Kafka is a publisher that writes messages to an Apache Kafka cluster.
 // It implements the relay.Publisher interface.
 type Kafka struct {
 	writer *kafka.Writer
+	cfg    KafkaConfig
 }
 
 // NewKafka initializes a new Kafka writer with strict ordering and safety.
@@ -43,27 +44,52 @@ type Kafka struct {
 // and configures the underlying writer with a Hash balancer to ensure
 // messages with the same PartitionKey are always routed to the same
 // Kafka partition.
-func NewKafka(cfg KafkaConfig) *Kafka {
-	brokerList := strings.Split(strings.TrimPrefix(cfg.Brokers, "kafka://"), ",")
+func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
-	return &Kafka{
-		writer: &kafka.Writer{
-			Addr:         kafka.TCP(brokerList...),
-			Balancer:     &kafka.Hash{},
-			RequiredAcks: cfg.RequiredAcks,
-			Async:        cfg.Async,
-
-			MaxAttempts:  cfg.MaxAttempts,
-			WriteTimeout: cfg.WriteTimeout,
-			ReadTimeout:  cfg.ReadTimeout,
-
-			// Critical Performance Overrides
-			BatchSize:    cfg.BatchSize,
-			BatchBytes:   cfg.BatchBytes,
-			BatchTimeout: cfg.BatchTimeout,
-			Compression:  cfg.Compression,
-		},
+	if len(cfg.Brokers) < 1 || (len(cfg.Brokers) == 1 && cfg.Brokers[0] == "") {
+		return nil, fmt.Errorf(
+			"kafka connection failed: no broker addresses provided in configuration",
+		)
 	}
+	return &Kafka{
+		cfg: cfg,
+	}, nil
+
+}
+
+// Connect satisfies the relay.Publisher interface.
+// It initializes the Kafka writer using the stored configuration.
+func (k *Kafka) Connect(ctx context.Context) error {
+
+	if k.writer != nil {
+		return nil
+	}
+
+	// Perform a quick Dial check to ensure brokers are reachable
+	// before committing to the writer lifecycle.
+	if err := k.Ping(ctx); err != nil {
+		return fmt.Errorf("initial kafka connection check failed: %w, %v", err, k.cfg.Brokers)
+	}
+
+	k.writer = &kafka.Writer{
+		Addr:         kafka.TCP(k.cfg.Brokers...),
+		Balancer:     &kafka.Hash{},
+		RequiredAcks: k.cfg.RequiredAcks,
+		Async:        k.cfg.Async,
+
+		MaxAttempts:  k.cfg.MaxAttempts,
+		WriteTimeout: k.cfg.WriteTimeout,
+		ReadTimeout:  k.cfg.ReadTimeout,
+
+		// Critical Performance Overrides
+		BatchSize:    k.cfg.BatchSize,
+		BatchBytes:   k.cfg.BatchBytes,
+		BatchTimeout: k.cfg.BatchTimeout,
+		Compression:  k.cfg.Compression,
+	}
+
+	return nil
+
 }
 
 // Publish sends a single event to Kafka.
@@ -163,8 +189,8 @@ func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 // Close gracefully shuts down the Kafka publisher.
 // It blocks until all buffered messages are flushed or the context expires.
 func (k *Kafka) Close(_ context.Context) error {
-	if k.writer == nil {
-		return nil
+	if k == nil || k.writer == nil {
+		return nil // Safe to close if never connected
 	}
 
 	// k.writer.Close() returns an error if the flush fails or if
@@ -179,20 +205,22 @@ func (k *Kafka) Close(_ context.Context) error {
 // Ping verifies the connectivity to the Kafka brokers by attempting to
 // fetch metadata or checking the underlying connection state.
 func (k *Kafka) Ping(ctx context.Context) error {
-	if k.writer == nil {
-		return fmt.Errorf("kafka writer not initialized")
+	var addr string
+	if k.writer != nil {
+		addr = k.writer.Addr.String()
+	} else {
+		addr = k.cfg.Brokers[0]
 	}
 
-	conn, err := kafka.DialContext(ctx, k.writer.Addr.Network(), k.writer.Addr.String())
+	dialer := &kafka.Dialer{
+		Timeout:   k.cfg.ConnectionTimeout,
+		DualStack: true,
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to dial kafka broker: %w", err)
+		return fmt.Errorf("failed to dial kafka broker at %s: %w", addr, err)
 	}
 	defer func() { _ = conn.Close() }()
-
-	_, err = conn.Controller()
-	if err != nil {
-		return fmt.Errorf("failed to fetch kafka controller: %w", err)
-	}
 
 	return nil
 }

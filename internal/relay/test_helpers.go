@@ -92,6 +92,12 @@ type MockPublisher struct {
 	mock.Mock
 }
 
+// Connect mocks the connect method of publisher.
+func (m *MockPublisher) Connect(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 // Publish mocks the dispatching of a single event to the target messaging system.
 func (m *MockPublisher) Publish(ctx context.Context, event Event) error {
 	args := m.Called(ctx, event)

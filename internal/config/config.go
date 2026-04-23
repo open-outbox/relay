@@ -71,6 +71,12 @@ type Config struct {
 	//	Default: 100
 	ReapBatchSize int `mapstructure:"REAP_BATCH_SIZE"`
 
+	// PublisherConnectRetryInterval defines how long the engine waits between
+	// attempts to connect to the message broker (NATS, Kafka, etc.) during startup.
+	// This prevents the relay from crashing if the broker is still booting up.
+	// 	Default: "5s"
+	PublisherConnectRetryInterval time.Duration `mapstructure:"PUBLISHER_CONNECT_RETRY_INTERVAL"`
+
 	// ServerPort is the address/port for the HTTP health check and metrics server.
 	//	Default: ":8080"
 	ServerPort string `mapstructure:"SERVER_PORT"`
@@ -107,6 +113,11 @@ type Config struct {
 	//	Default: "5s"
 	NatsPublishTimeout time.Duration `mapstructure:"NATS_PUBLISH_TIMEOUT"`
 
+	// NatsConnectionTimeout is the maximum time to wait for the initial connection
+	// and handshake with the NATS server.
+	//	Default: 5s
+	NatsConnectionTimeout time.Duration `mapstructure:"NATS_CONNECTION_TIMEOUT"`
+
 	// RedisConnectionTimeout is the maximum time to wait for the redis client to connect to the
 	// redis server.
 	//	Default: "5s"
@@ -128,6 +139,11 @@ type Config struct {
 	// KafkaReadTimeout is the deadline for reading a response (like ACKs) from the Kafka broker.
 	//	Default: "10s"
 	KafkaReadTimeout time.Duration `mapstructure:"KAFKA_READ_TIMEOUT"`
+
+	// KafkaConnectionTimeout is the maximum time allowed to establish the initial
+	// TCP connection and handshake with the Kafka brokers.
+	// 	Default: 10s
+	KafkaConnectionTimeout time.Duration `mapstructure:"KAFKA_CONNECTION_TIMEOUT"`
 
 	// KafkaBatchSize defines how many messages the writer collects before flushing to the broker.
 	//
@@ -194,6 +210,7 @@ func Load() (*Config, error) {
 	v.SetDefault("BATCH_SIZE", 100)
 	v.SetDefault("LEASE_TIMEOUT", "3m")
 	v.SetDefault("REAP_BATCH_SIZE", 100)
+	v.SetDefault("PUBLISHER_CONNECT_RETRY_INTERVAL", "5s")
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
 	v.SetDefault("ENVIRONMENT", Production)
@@ -206,6 +223,7 @@ func Load() (*Config, error) {
 
 	//Nats Relay-Optimized Defaults
 	v.SetDefault("NATS_PUBLISH_TIMEOUT", "5s")
+	v.SetDefault("NATS_CONNECTION_TIMEOUT", "5s")
 
 	//Redis Relay-Optimized Defaults
 	v.SetDefault("REDIS_CONNECTION_TIMEOUT", "5s")
@@ -218,6 +236,7 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_BATCH_SIZE", 1)
 	v.SetDefault("KAFKA_BATCH_BYTES", 10485760) // 10MB default
 	v.SetDefault("KAFKA_BATCH_TIMEOUT", "10ms")
+	v.SetDefault("KAFKA_CONNECTION_TIMEOUT", "10ms")
 	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
 	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")

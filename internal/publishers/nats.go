@@ -16,27 +16,50 @@ import (
 // It implements the relay.Publisher interface by publishing messages to NATS subjects
 // that are backed by a JetStream stream for durability.
 type Nats struct {
-	conn           *nats.Conn
-	js             nats.JetStreamContext
-	publishTimeout time.Duration
+	url               string
+	conn              *nats.Conn
+	js                nats.JetStreamContext
+	connectionTimeout time.Duration
+	publishTimeout    time.Duration
 }
 
 // NewNats establishes a connection to a NATS server and initializes a JetStream context.
 // It sets a client name "Open-Outbox-Relay" on the connection to facilitate easier
 // identification in NATS monitoring tools.
-func NewNats(url string, publishTimeout time.Duration) (*Nats, error) {
-	nc, err := nats.Connect(url, nats.Name("Open-Outbox-Relay"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+func NewNats(url string, publishTimeout, connectionTimeout time.Duration) (*Nats, error) {
+
+	if url == "" {
+		return nil, errors.New("nats url is required")
 	}
 
+	return &Nats{
+		url:               url,
+		publishTimeout:    publishTimeout,
+		connectionTimeout: connectionTimeout,
+	}, nil
+}
+
+// Connect establishes the connection to the NATS server.
+func (n *Nats) Connect(_ context.Context) error {
+	if n.conn != nil && n.conn.IsConnected() {
+		return nil
+	}
+	nc, err := nats.Connect(
+		n.url,
+		nats.Timeout(n.connectionTimeout),
+		nats.Name("Open-Outbox-Relay"),
+	)
+	if err != nil {
+		return fmt.Errorf("nats connection failed: %w", err)
+	}
+	n.conn = nc
 	js, err := nc.JetStream()
 	if err != nil {
 		nc.Close()
-		return nil, fmt.Errorf("failed to load JetStream: %w", err)
+		return fmt.Errorf("failed to load JetStream: %w", err)
 	}
-
-	return &Nats{conn: nc, js: js, publishTimeout: publishTimeout}, nil
+	n.js = js
+	return nil
 }
 
 // Publish sends an event to NATS JetStream.

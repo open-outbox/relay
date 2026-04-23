@@ -16,7 +16,10 @@ import (
 // Redis is a publisher that pushes events into Redis Streams using the XADD command.
 // It implements the relay.Publisher interface.
 type Redis struct {
-	client *redis.Client
+	url               string
+	writeTimeout      time.Duration
+	connectionTimeout time.Duration
+	client            *redis.Client
 }
 
 // NewRedis establishes a connection to a Redis server.
@@ -24,27 +27,50 @@ type Redis struct {
 // It accepts redis URLs like "redis://<user>:<pass>@localhost:6379/0" .
 func NewRedis(
 	url string,
-	writeTimeout time.Duration,
-	connectionTimeout time.Duration,
+	writeTimeout, connectionTimeout time.Duration,
 ) (*Redis, error) {
-	opts, err := redis.ParseURL(url)
-	if err != nil {
+
+	if url == "" {
+		return nil, errors.New("redis url is required")
+	}
+
+	// parse the URL here to validate the string format immediately (Fail-Fast on typos)
+	if _, err := redis.ParseURL(url); err != nil {
 		return nil, fmt.Errorf("invalid redis url: %w", err)
 	}
 
-	opts.WriteTimeout = writeTimeout
-	opts.ReadTimeout = writeTimeout
+	return &Redis{
+		url:               url,
+		writeTimeout:      writeTimeout,
+		connectionTimeout: connectionTimeout,
+	}, nil
+}
+
+// Connect establishes the connection to the Redis server.
+// It parses the URL, configures the client, and verifies connectivity with a Ping.
+func (r *Redis) Connect(ctx context.Context) error {
+	if r.client != nil {
+		return nil
+	}
+
+	opts, err := redis.ParseURL(r.url)
+	if err != nil {
+		return fmt.Errorf("redis config error: %w", err)
+	}
+
+	opts.WriteTimeout = r.writeTimeout
+	opts.ReadTimeout = r.writeTimeout
+	opts.DialTimeout = r.connectionTimeout
 
 	client := redis.NewClient(opts)
 
-	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
-	defer cancel()
-
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("redis connection failed: %w", err)
+		defer func() { _ = client.Close() }()
+		return fmt.Errorf("redis connection failed: %w", err)
 	}
 
-	return &Redis{client: client}, nil
+	r.client = client
+	return nil
 }
 
 // Publish appends the event to a Redis Stream.
