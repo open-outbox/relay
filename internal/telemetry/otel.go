@@ -109,51 +109,41 @@ func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	ctx := context.Background()
 	batchBuckets := []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 1000, 2500, 5000, 10000}
-	customBuckets := []float64{
-		.0005, // 500µs (Micro-latencies)
-		.001,  // 1ms
-		.0025, // 2.5ms
-		.005,  // 5ms
-		.01,   // 10ms
-		.025,  // 25ms
-		.05,   // 50ms
-		.1,    // 100ms
-		.25,   // 250ms
-		.5,    // 500ms
-		1,     // 1s (The "Warning" threshold)
-		2.5,   // 2.5s
-		5,     // 5s
-		10,    // 10s (The "Critical/Timeout" threshold)
+	latencyBuckets := []float64{
+		.0005,                             // 500µs (Micro-latencies)
+		.001,                              // 1ms
+		.0025,                             // 2.5ms
+		.005,                              // 5ms
+		.01,                               // 10ms
+		.025,                              // 25ms
+		.05,                               // 50ms
+		.1,                                // 100ms
+		.25,                               // 250ms
+		.5,                                // 500ms
+		1,                                 // 1s (The "Warning" threshold)
+		2.5,                               // 2.5s
+		5,                                 // 5s
+		10, 30, 60, 300, 1800, 3600, 7200, // 10s and up (The "Critical/Timeout" threshold)
 	}
 
 	e2eLatencyView := metric.NewView(
 		metric.Instrument{Name: "openoutbox.events.e2e_latency"},
 		metric.Stream{
 			Aggregation: metric.AggregationExplicitBucketHistogram{
-				Boundaries: []float64{
-					0.1, 0.25, 9.5, 1, 2.5, 5, 10, // Real-time range
-					30, 60, 300, 1800, 3600, 7200, // Backlog/Draining range (up to 2h)
-				},
+				Boundaries: latencyBuckets,
 			},
 		},
 	)
 
-	storageLatencyView := metric.NewView(
-		metric.Instrument{Name: "openoutbox.storage.latency"},
+	latencyView := metric.NewView(
+		metric.Instrument{Name: "openoutbox.*.latency"},
 		metric.Stream{
 			Aggregation: metric.AggregationExplicitBucketHistogram{
-				Boundaries: customBuckets,
+				Boundaries: latencyBuckets,
 			},
 		},
 	)
-	publisherLatencyView := metric.NewView(
-		metric.Instrument{Name: "openoutbox.publisher.latency"},
-		metric.Stream{
-			Aggregation: metric.AggregationExplicitBucketHistogram{
-				Boundaries: customBuckets,
-			},
-		},
-	)
+
 	batchView := metric.NewView(
 		metric.Instrument{Name: "openoutbox.events.batch_size"},
 		metric.Stream{
@@ -171,8 +161,7 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 		metric.WithResource(res),
 		metric.WithReader(metricReader),
 		metric.WithView(e2eLatencyView),
-		metric.WithView(storageLatencyView),
-		metric.WithView(publisherLatencyView),
+		metric.WithView(latencyView),
 		metric.WithView(batchView),
 	)
 
