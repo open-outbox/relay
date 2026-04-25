@@ -6,8 +6,10 @@ package container
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
 	"github.com/open-outbox/relay/internal/publishers"
@@ -133,8 +135,13 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				Jitter:      cfg.RetryJitter,
 			}
 
+			relayID := cfg.RelayID
+			if relayID == "" {
+				relayID = generateRelayID()
+			}
+
 			params := relay.EngineParams{
-				RelayID:                       cfg.RelayID,
+				RelayID:                       relayID,
 				Interval:                      cfg.PollInterval,
 				BatchSize:                     cfg.BatchSize,
 				LeaseTimeout:                  cfg.LeaseTimeout,
@@ -143,7 +150,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				RetryPolicy:                   retruPolicy,
 			}
 
-			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel)
+			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel, relayID)
 
 			return relay.NewEngine(s, instrumentedPublisher, params, tel)
 		},
@@ -226,4 +233,15 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		Compression:       comp,
 	}
 	return publishers.NewKafka(kCfg)
+}
+
+func generateRelayID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown-relay"
+	}
+
+	suffix := uuid.New().String()[:4]
+
+	return fmt.Sprintf("%s-%s", hostname, suffix)
 }

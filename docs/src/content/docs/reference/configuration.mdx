@@ -78,9 +78,16 @@ operate within shared databases while avoiding naming conflicts.
 
 <Badge variant="note" text="Required"></Badge> <Badge variant="default" text="String"></Badge>
 
-**Default:** `os.Hostname()`
+**Default:** `os.Hostname() + "-" + uuid[:4]`
 
-A unique identifier for this Relay instance. Essential for lease management when running multiple workers.
+A unique identifier for this specific Relay instance. This ID is used for database lease management,
+ metric partitioning, and distributed locking.
+
+**Behavior**: If left empty, the engine automatically generates an ID using the system hostname and
+a short unique suffix to prevent collisions in high-density environments.
+
+**Orchestration**: When running in Kubernetes or Docker Compose, it is recommended to leave this empty
+ to allow the engine to generate a unique identity per container, or map it to the Pod/Service name via the downward API.
 
 ---
 

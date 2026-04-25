@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,17 +67,12 @@ func NewEngine(
 	tel telemetry.Telemetry,
 ) (*Engine, error) {
 
-	id := params.RelayID
-	if id == "" {
-		id = generateRelayID()
-	}
-
 	if params.BatchSize <= 0 {
 		return nil, fmt.Errorf("engine cannot poll with batch size 0")
 	}
 
 	return &Engine{
-		relayID:                       id,
+		relayID:                       params.RelayID,
 		storage:                       storage,
 		publisher:                     publisher,
 		interval:                      params.Interval,
@@ -288,9 +282,14 @@ func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
 	events, err := e.storage.ClaimBatch(ctx, e.relayID, e.batchSize, e.events)
 
 	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
-		metric.WithAttributes(attribute.String("op", "claim")))
-	e.metrics.BatchSize.Record(ctx, int64(len(events)))
-
+		metric.WithAttributes(
+			attribute.String("op", "claim"),
+			attribute.String("relay_id", e.relayID)),
+	)
+	e.metrics.BatchSize.Record(ctx, int64(len(events)),
+		metric.WithAttributes(
+			attribute.String("relay_id", e.relayID)),
+	)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -323,6 +322,7 @@ func (e *Engine) markDelivered(ctx context.Context, ids []uuid.UUID) error {
 		metric.WithAttributes(
 			attribute.String("op", "mark_delivered"),
 			attribute.String("status", status),
+			attribute.String("relay_id", e.relayID),
 		),
 	)
 
@@ -349,6 +349,7 @@ func (e *Engine) markFailed(ctx context.Context, failures []FailedEvent) error {
 		metric.WithAttributes(
 			attribute.String("op", "mark_failed"),
 			attribute.String("status", status),
+			attribute.String("relay_id", e.relayID),
 		),
 	)
 
@@ -386,6 +387,7 @@ func (e *Engine) publishOnByOne(
 					attribute.String("status", "failed"),
 					attribute.String("type", event.Type),
 					attribute.String("code", errorCode),
+					attribute.String("relay_id", e.relayID),
 				),
 			)
 
@@ -395,13 +397,18 @@ func (e *Engine) publishOnByOne(
 		successEvents = append(successEvents, event.ID)
 
 		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
-			metric.WithAttributes(attribute.String("type", event.Type)))
+			metric.WithAttributes(
+				attribute.String("type", event.Type),
+				attribute.String("relay_id", e.relayID),
+			),
+		)
 		e.metrics.EventsTotal.Add(
 			ctx,
 			1,
 			metric.WithAttributes(
 				attribute.String("status", "success"),
 				attribute.String("type", event.Type),
+				attribute.String("relay_id", e.relayID),
 			),
 		)
 
@@ -506,23 +513,24 @@ func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 	}
 
 	e.metrics.PendingGauge.Record(ctx, stats.PendingCount,
-		metric.WithAttributes(attribute.String("status", "new")))
+		metric.WithAttributes(
+			attribute.String("status", "new"),
+			attribute.String("relay_id", e.relayID),
+		),
+	)
 
 	e.metrics.PendingGauge.Record(ctx, stats.RetryingCount,
-		metric.WithAttributes(attribute.String("status", "retrying")))
+		metric.WithAttributes(
+			attribute.String("status", "retrying"),
+			attribute.String("relay_id", e.relayID),
+		),
+	)
 
-	e.metrics.OldestPendingSeconds.Record(ctx, stats.OldestAgeSec)
-}
-
-func generateRelayID() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown-relay"
-	}
-
-	suffix := uuid.New().String()[:4]
-
-	return fmt.Sprintf("%s-%s", hostname, suffix)
+	e.metrics.OldestPendingSeconds.Record(ctx, stats.OldestAgeSec,
+		metric.WithAttributes(
+			attribute.String("relay_id", e.relayID),
+		),
+	)
 }
 
 func (e *Engine) logIfError(err error, msg string, fields ...zap.Field) {
