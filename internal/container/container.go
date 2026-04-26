@@ -147,6 +147,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				LeaseTimeout:                  cfg.LeaseTimeout,
 				ReapBatchSize:                 cfg.ReapBatchSize,
 				PublisherConnectRetryInterval: cfg.PublisherConnectRetryInterval,
+				HealthCheckInterval:           cfg.HealthCheckInterval,
 				RetryPolicy:                   retruPolicy,
 			}
 

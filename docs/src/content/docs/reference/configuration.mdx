@@ -155,9 +155,20 @@ The number of expired leases the cleanup engine will reset back to `PENDING` in 
   The default value of `3m` is considered for a zero delay environment each batch can be processed under a second.
 </Aside>
 
+### HEALTH_CHECK_INTERVAL
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+**Default**: 5s
+
+The frequency at which the engine performs background health probes on its dependencies
+(Storage and Publisher). This interval determines the "heartbeat" of the relay and controls
+how quickly the instance detects an outage and updates its operational state.
+
 ---
 
 ### `PUBLISHER_CONNECT_RETRY_INTERVAL`
+
 <Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
 
 Default: 5s

@@ -77,6 +77,12 @@ type Config struct {
 	// 	Default: "5s"
 	PublisherConnectRetryInterval time.Duration `mapstructure:"PUBLISHER_CONNECT_RETRY_INTERVAL"`
 
+	// HealthCheckInterval defines the frequency of background health probes.
+	// This determines how quickly the engine detects outages and flips the
+	// relay state to Paused or Error.
+	// 	Default: "5s"
+	HealthCheckInterval time.Duration `mapstructure:"HEALTH_CHECK_INTERVAL"`
+
 	// ServerPort is the address/port for the HTTP health check and metrics server.
 	//	Default: ":8080"
 	ServerPort string `mapstructure:"SERVER_PORT"`
@@ -210,6 +216,7 @@ func Load() (*Config, error) {
 	v.SetDefault("BATCH_SIZE", 100)
 	v.SetDefault("LEASE_TIMEOUT", "3m")
 	v.SetDefault("REAP_BATCH_SIZE", 100)
+	v.SetDefault("HEALTH_CHECK_INTERVAL", "5s")
 	v.SetDefault("PUBLISHER_CONNECT_RETRY_INTERVAL", "5s")
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
