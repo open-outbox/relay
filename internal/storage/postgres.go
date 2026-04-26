@@ -188,9 +188,9 @@ func (p *Postgres) ClaimBatch(
 	}
 
 	rows, err := p.pool.Query(ctx, p.queryClaimBatch,
-		relay.StatusPending,
+		relay.EventStatusPending,
 		batchSize,
-		relay.StatusDelivering,
+		relay.EventStatusDelivering,
 		relayID,
 	)
 	if err != nil {
@@ -235,9 +235,9 @@ func (p *Postgres) MarkDeliveredBatch(
 	}
 
 	_, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
-		relay.StatusDelivered,
+		relay.EventStatusDelivered,
 		ids,
-		relay.StatusDelivering,
+		relay.EventStatusDelivering,
 		relayID,
 	)
 
@@ -264,7 +264,7 @@ func (p *Postgres) MarkFailedBatch(
 
 	n := len(failures)
 	ids := make([]uuid.UUID, n)
-	statuses := make([]relay.Status, n)
+	statuses := make([]relay.EventStatus, n)
 	avails := make([]time.Time, n)
 	attempts := make([]int, n)
 	errors := make([]string, n)
@@ -283,7 +283,7 @@ func (p *Postgres) MarkFailedBatch(
 		avails,
 		attempts,
 		errors,
-		relay.StatusDelivering,
+		relay.EventStatusDelivering,
 		relayID,
 	)
 
@@ -313,10 +313,10 @@ func (p *Postgres) ReapExpiredLeases(
 	result, err := p.pool.Exec(
 		ctx,
 		p.queryReapExpiredLeases,
-		relay.StatusDelivering,
+		relay.EventStatusDelivering,
 		durationToInterval(leaseTimeout),
 		limit,
-		relay.StatusPending,
+		relay.EventStatusPending,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to reap expired leases: %w", err)
@@ -330,7 +330,7 @@ func (p *Postgres) ReapExpiredLeases(
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
-	err := p.pool.QueryRow(ctx, p.queryStats, relay.StatusPending).Scan(
+	err := p.pool.QueryRow(ctx, p.queryStats, relay.EventStatusPending).Scan(
 		&stats.PendingCount,
 		&stats.RetryingCount,
 		&stats.OldestAgeSec,
@@ -425,7 +425,12 @@ func (p *Postgres) executePrune(
 	}()
 
 	if deliveredInterval != "" {
-		tag, err := tx.Exec(ctx, p.queryPruneDelivered, relay.StatusDelivered, deliveredInterval)
+		tag, err := tx.Exec(
+			ctx,
+			p.queryPruneDelivered,
+			relay.EventStatusDelivered,
+			deliveredInterval,
+		)
 		if err != nil {
 			return res, fmt.Errorf("failed to prune delivered: %w", err)
 		}
@@ -433,7 +438,7 @@ func (p *Postgres) executePrune(
 	}
 
 	if deadInterval != "" {
-		tag, err := tx.Exec(ctx, p.queryPruneDead, relay.StatusDead, deadInterval)
+		tag, err := tx.Exec(ctx, p.queryPruneDead, relay.EventStatusDead, deadInterval)
 		if err != nil {
 			return res, fmt.Errorf("failed to prune dead: %w", err)
 		}

@@ -29,7 +29,7 @@ import (
 
 type SeedOptions struct {
 	ID          uuid.UUID
-	Status      relay.Status
+	Status      relay.EventStatus
 	CreatedAt   time.Time
 	AvailableAt time.Time
 	DeliveredAt *time.Time
@@ -191,9 +191,9 @@ func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tab
 		opts.AvailableAt = opts.CreatedAt
 	}
 	if opts.Status == "" {
-		opts.Status = relay.StatusPending
+		opts.Status = relay.EventStatusPending
 	}
-	if opts.Status == relay.StatusDelivered && opts.DeliveredAt == nil {
+	if opts.Status == relay.EventStatusDelivered && opts.DeliveredAt == nil {
 		opts.DeliveredAt = &opts.CreatedAt
 	}
 	if opts.UpdatedAt == nil {

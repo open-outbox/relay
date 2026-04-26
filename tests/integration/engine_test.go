@@ -109,7 +109,7 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 	pub.On("Connect", mock.Anything).Return(nil)
 
 	store.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(f []relay.FailedEvent) bool {
-		return len(f) == 1 && f[0].ID == eventID && f[0].NewStatus == relay.StatusDead
+		return len(f) == 1 && f[0].ID == eventID && f[0].NewStatus == relay.EventStatusDead
 	}), mock.Anything).Return(nil).Once()
 
 	// Silence background noise

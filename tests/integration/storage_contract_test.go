@@ -38,26 +38,26 @@ func runStorageContractTest(
 		// id1: Oldest
 		seed.Seed(SeedOptions{
 			ID:          id1,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
 			AvailableAt: now.Add(-10 * time.Minute)})
 		// id2: Newer than id1
 		seed.Seed(SeedOptions{
 			ID:          id2,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-5 * time.Minute),
 			AvailableAt: now.Add(-5 * time.Minute),
 		})
 		// id3: Same created_at as id4, but id3 available_at is earlier
 		seed.Seed(SeedOptions{
 			ID:          id3,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-2 * time.Minute),
 			AvailableAt: now.Add(-1 * time.Minute),
 		})
 		seed.Seed(SeedOptions{
 			ID:          id4,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-2 * time.Minute),
 			AvailableAt: now.Add(-5 * time.Minute),
 		})
@@ -90,7 +90,7 @@ func runStorageContractTest(
 		eventID := uuid.New()
 		seed.Seed(SeedOptions{
 			ID:          eventID,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
 			AvailableAt: now.Add(-10 * time.Minute),
 		})
@@ -118,7 +118,7 @@ func runStorageContractTest(
 		// Available in future
 		seed.Seed(SeedOptions{
 			ID:          eventID,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
 			AvailableAt: time.Now().Add(1 * time.Minute),
 		})
@@ -133,7 +133,7 @@ func runStorageContractTest(
 		eventID := uuid.New()
 		seed.Seed(SeedOptions{
 			ID:          eventID,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
 			AvailableAt: now.Add(-1 * time.Minute),
 		})
@@ -155,7 +155,7 @@ func runStorageContractTest(
 		eventID := uuid.New()
 		seed.Seed(SeedOptions{
 			ID:          eventID,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
 			AvailableAt: now.Add(-1 * time.Minute),
 			Attempts:    0,
@@ -169,7 +169,7 @@ func runStorageContractTest(
 		failures := []relay.FailedEvent{
 			{
 				ID:          claimed[0].ID,
-				NewStatus:   relay.StatusPending, // Assuming you have this constant
+				NewStatus:   relay.EventStatusPending, // Assuming you have this constant
 				AvailableAt: failTime,
 				Attempts:    1,
 				LastError:   "connection timeout",
@@ -204,7 +204,7 @@ func runStorageContractTest(
 		eventID := uuid.New()
 		seed.Seed(SeedOptions{
 			ID:          eventID,
-			Status:      relay.StatusPending,
+			Status:      relay.EventStatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
 			AvailableAt: now.Add(-1 * time.Minute),
 			Attempts:    0,
@@ -217,8 +217,8 @@ func runStorageContractTest(
 		failures := []relay.FailedEvent{
 			{
 				ID:          claimed[0].ID,
-				NewStatus:   relay.StatusDead, // Assuming status for quarantined events
-				AvailableAt: time.Time{},      // Doesn't matter for Dead events
+				NewStatus:   relay.EventStatusDead, // Assuming status for quarantined events
+				AvailableAt: time.Time{},           // Doesn't matter for Dead events
 				Attempts:    5,
 				LastError:   "max retries exceeded",
 			},
@@ -238,7 +238,7 @@ func runStorageContractTest(
 		// Seed an event locked by a "crashed" worker 20 minutes ago
 		seed.Seed(SeedOptions{
 			ID:       eventID,
-			Status:   relay.StatusDelivering,
+			Status:   relay.EventStatusDelivering,
 			LockedAt: ptr(time.Now().Add(-20 * time.Minute)),
 			LockedBy: ptr("crashed-worker"),
 		})
@@ -266,19 +266,19 @@ func runStorageContractTest(
 		// Oldest PENDING
 		seed.Seed(SeedOptions{
 			ID:        idOldest,
-			Status:    relay.StatusPending,
+			Status:    relay.EventStatusPending,
 			CreatedAt: now.Add(-10 * time.Minute),
 		})
 		// Newer PENDING
 		seed.Seed(SeedOptions{
 			ID:        idNewer,
-			Status:    relay.StatusPending,
+			Status:    relay.EventStatusPending,
 			CreatedAt: now.Add(-1 * time.Minute),
 		})
 		// Manually seed a locked event (should be ignored by PendingCount and Age)
 		seed.Seed(SeedOptions{
 			ID:     idLocked,
-			Status: relay.StatusDelivering,
+			Status: relay.EventStatusDelivering,
 		})
 
 		// Fetch Stats
@@ -325,27 +325,27 @@ func runStorageContractTest(
 		// seedRaw(id, status, createdAt, availableAt)
 		seed.Seed(SeedOptions{
 			ID:          idDeliveredOld,
-			Status:      relay.StatusDelivered,
+			Status:      relay.EventStatusDelivered,
 			DeliveredAt: ptr(now.Add(-48 * time.Hour)),
 		})
 		seed.Seed(SeedOptions{
 			ID:          idDeliveredNew,
-			Status:      relay.StatusDelivered,
+			Status:      relay.EventStatusDelivered,
 			DeliveredAt: ptr(now.Add(-1 * time.Hour)),
 		})
 		seed.Seed(SeedOptions{
 			ID:        idDeadOld,
-			Status:    relay.StatusDead,
+			Status:    relay.EventStatusDead,
 			UpdatedAt: ptr(now.Add(-40 * 24 * time.Hour)),
 		})
 		seed.Seed(SeedOptions{
 			ID:        idDeadOld2,
-			Status:    relay.StatusDead,
+			Status:    relay.EventStatusDead,
 			UpdatedAt: ptr(now.Add(-40 * 24 * time.Hour)),
 		})
 		seed.Seed(SeedOptions{
 			ID:        idPendingOld,
-			Status:    relay.StatusPending,
+			Status:    relay.EventStatusPending,
 			CreatedAt: now.Add(-40 * 24 * time.Hour),
 		})
 
@@ -450,7 +450,7 @@ func runStorageContractTest(
 
 		// Seed and reap twice
 		seed.Seed(SeedOptions{
-			Status:   relay.StatusDelivering,
+			Status:   relay.EventStatusDelivering,
 			LockedAt: ptr(time.Now().Add(-20 * time.Minute)),
 		})
 

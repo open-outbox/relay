@@ -7,20 +7,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// Status represents the lifecycle stage of an event in the outbox.
-type Status string
+// EventStatus represents the lifecycle stage of an event in the outbox.
+type EventStatus string
 
 const (
-	// StatusPending indicates the event is ready to be picked up by a relay instance.
-	StatusPending Status = "PENDING"
-	// StatusDelivering indicates the event is currently locked and being
+	// EventStatusPending indicates the event is ready to be picked up by a relay instance.
+	EventStatusPending EventStatus = "PENDING"
+	// EventStatusDelivering indicates the event is currently locked and being
 	// processed by a relay instance.
-	StatusDelivering Status = "DELIVERING"
-	// StatusDelivered indicates the event was successfully published to the message broker.
-	StatusDelivered Status = "DELIVERED"
-	// StatusDead indicates the event failed delivery attempts beyond the
+	EventStatusDelivering EventStatus = "DELIVERING"
+	// EventStatusDelivered indicates the event was successfully published to the message broker.
+	EventStatusDelivered EventStatus = "DELIVERED"
+	// EventStatusDead indicates the event failed delivery attempts beyond the
 	// retry limit and is quarantined.
-	StatusDead Status = "DEAD"
+	EventStatusDead EventStatus = "DEAD"
 )
 
 // Event represents a single unit of work from the outbox table.
@@ -60,7 +60,7 @@ type FailedEvent struct {
 	// ID of the event that failed.
 	ID uuid.UUID `json:"id"           db:"id"`
 	// NewStatus is the state the event should transition to (PENDING or DEAD).
-	NewStatus Status `json:"new_status"   db:"status"`
+	NewStatus EventStatus `json:"new_status"   db:"status"`
 	// AvailableAt is the time when the event becomes eligible for retry.
 	AvailableAt time.Time `json:"available_at" db:"available_at"`
 	// Attempts is the incremented count of delivery tries.

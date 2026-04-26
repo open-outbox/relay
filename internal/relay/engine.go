@@ -481,10 +481,10 @@ func (e *Engine) assessFailure(event Event, publishError error) (FailedEvent, st
 	}
 
 	if shouldRetry {
-		result.NewStatus = StatusPending
+		result.NewStatus = EventStatusPending
 		result.AvailableAt = time.Now().Add(delay)
 	} else {
-		result.NewStatus = StatusDead
+		result.NewStatus = EventStatusDead
 		result.AvailableAt = time.Now()
 
 		if !isRetryable {
