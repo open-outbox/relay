@@ -110,20 +110,19 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	ctx := context.Background()
 	batchBuckets := []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 1000, 2500, 5000, 10000}
 	latencyBuckets := []float64{
-		.0005,                             // 500µs (Micro-latencies)
-		.001,                              // 1ms
-		.0025,                             // 2.5ms
-		.005,                              // 5ms
-		.01,                               // 10ms
-		.025,                              // 25ms
-		.05,                               // 50ms
-		.1,                                // 100ms
-		.25,                               // 250ms
-		.5,                                // 500ms
-		1,                                 // 1s (The "Warning" threshold)
-		2.5,                               // 2.5s
-		5,                                 // 5s
-		10, 30, 60, 300, 1800, 3600, 7200, // 10s and up (The "Critical/Timeout" threshold)
+		.002, // 2ms   - Ideal for local DB/caching hits
+		.005, // 5ms   - Fast processing
+		.01,  // 10ms  - Normal operational floor
+		.025, // 25ms  - Standard network roundtrip
+		.05,  // 50ms
+		.1,   // 100ms - The "Snappy" threshold
+		.25,  // 250ms
+		.5,   // 500ms
+		1,    // 1s    - The SLO boundary (Warning)
+		2.5,  // 2.5s  - Heavy congestion
+		5,    // 5s    - Timeout territory
+		10,   // 10s   - Critical failure/Deadlock
+		30,   // 30s   - Dead
 	}
 
 	e2eLatencyView := metric.NewView(
