@@ -14,6 +14,9 @@
 <a href="https://pkg.go.dev/github.com/open-outbox/relay">
     <img src="https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white" alt="Go Reference">
 </a>
+<a href="https://grafana.com/grafana/dashboards/25221/">
+    <img src="https://img.shields.io/badge/Grafana-Dashboard-orange" alt="Grafana Dashboard">
+</a>
 </p>
 
 # Open Outbox Relay

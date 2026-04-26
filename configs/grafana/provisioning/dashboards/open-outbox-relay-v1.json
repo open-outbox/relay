@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "OpenOutbox Relay: Performance & Reliability Overview\nThis dashboard provides a real-time view of the OpenOutbox Relay health, throughput, and delivery efficiency. It monitors the lifecycle of events as they move from the persistent storage (Transactional Outbox) to the message broker.\n\nKey Performance Indicators (KPIs):\nThroughput (EPS): Measured in Events Per Second. This highlights the sustained delivery speed across different statuses (Success/Failure).\n\nBatching Efficiency: Tracks the effectiveness of the BATCH_SIZE configuration, showing how many events are grouped per transaction.\n\nDelivery Health: Visualizes the ratio of successful deliveries versus failed attempts, allowing for quick identification of downstream broker issues or backoff triggers.\n\nLatency & Backoff: Monitors the time events spend in the outbox and how the system respects reliability constraints during high-load periods.",
+  "description": "# Open Outbox Relay: Performance & Reliability Overview\n\nThis dashboard provides a real-time view of the **Open Outbox Relay** health, throughput, and delivery efficiency. It is designed to monitor the lifecycle of events as they move from persistent storage (Transactional Outbox) to message brokers like Kafka, NATS, or Redis.\n\n### 🚀 Key Performance Indicators (KPIs)\n\n* **Throughput (EPS):** Measured in Events Per Second. Highlighting sustained delivery speeds across Success and Failure states.\n* **Batching Efficiency:** Tracks the effectiveness of `BATCH_SIZE` tuning, showing how many events are grouped per transaction.\n* **Delivery Health:** A visual ratio of successful deliveries vs. failed attempts, allowing for quick identification of downstream broker issues.\n* **Latency & Backoff:** Monitors the End-to-End time events spend in the outbox and ensures the relay respects backoff constraints during load.\n\n### 🛠 Prerequisites\n* **Collector:** OpenTelemetry (Go SDK) exported to Prometheus.\n* **Required Metrics:** `openoutbox_events_total`, `openoutbox_relay_state`, `openoutbox_events_e2e_latency_seconds_bucket`, etc.\n* **Template Variable:** This dashboard requires a `$DS_PROMETHEUS` data source variable.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Monitors the lifecycle state of the Relay Engine. 1 = Active (Healthy), 2 = Paused (Publisher Down), 3 = Error (Critical/Storage Down).",
       "fieldConfig": {
@@ -107,6 +107,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "openoutbox_relay_state",
@@ -137,7 +141,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "This panel visualizes the real-time processing rate of events, measured in Events Per Second (EPS).\n\nSuccess (Green): The rate of events successfully delivered to the publisher.\n\nFailed (Red): The rate of events that encountered an error during delivery or expired their retry attempts.",
       "fieldConfig": {
@@ -264,7 +268,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -281,7 +285,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "How long it will take to clear the current backlog at the current success rate. An increasing value indicates a bottleneck.",
       "fieldConfig": {
@@ -354,6 +358,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "sum(openoutbox_backlog_pending_count) \n/ \n(sum(rate(openoutbox_events_total{status=\"success\"}[1m])) + 1)",
           "interval": "30s",
@@ -368,7 +376,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Monitors the composition of the outbox. 'New' indicates traffic volume; 'Retrying' indicates delivery or downstream failures",
       "fieldConfig": {
@@ -510,6 +518,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "sum by (status) (openoutbox_backlog_pending_count{status=\"new\"})",
           "legendFormat": "New Events",
@@ -519,7 +531,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum by (status) (openoutbox_backlog_pending_count{status=\"retrying\"})",
@@ -535,7 +547,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "This panel tracks the age of the oldest pending event in the outbox. While backlog count measures volume, this metric measures SLA health; a rising age indicates that events are being produced faster than they can be delivered, or that specific \"poison pill\" events are stuck in the queue. It is the definitive indicator of whether the system is operating in real-time or falling into a lag state.",
       "fieldConfig": {
@@ -637,6 +649,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "max(openoutbox_backlog_oldest_age_seconds)",
           "legendFormat": "Oldest Event Age",
@@ -824,7 +840,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Measures how close the average batch size is to the configured target ($batch_size). High percentage means fewer database round-trips and better throughput. Low percentage indicates the system is thrashing with small batches.",
       "fieldConfig": {
@@ -883,6 +899,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "(\n  sum(rate(openoutbox_events_batch_size_sum[$__rate_interval])) \n  / \n  sum(rate(openoutbox_events_batch_size_count[$__rate_interval]))\n) / $batch_size",
           "interval": "15s",
@@ -910,7 +930,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "The 99th percentile of time taken for an event to travel from the database to the message broker. If this is 5s, it means 99% of your events are delivered within 5 seconds.",
       "fieldConfig": {
@@ -997,6 +1017,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(openoutbox_events_e2e_latency_seconds_bucket[$__rate_interval])))",
           "legendFormat": "P99 Latency",
@@ -1010,7 +1034,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Visualizes the density of event delivery times over time to identify latency patterns and outliers. Darker or more intense areas represent higher event volumes, making it easy to distinguish between real-time delivery and backlog processing.",
       "fieldConfig": {
@@ -1073,6 +1097,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "sum by (le) (rate(openoutbox_events_e2e_latency_seconds_bucket[$__rate_interval]))",
           "format": "heatmap",
@@ -1087,7 +1115,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "This panel monitors the outbound delivery speed by tracking the P99 and Median latency of the publisher (e.g., Kafka or NATS) against your $1s$ SLO. By visualizing the distribution of write times, you can instantly distinguish between isolated jitter (P99 spikes) and total downstream saturation (global latency climb)",
       "fieldConfig": {
@@ -1210,6 +1238,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(openoutbox_publisher_latency_seconds_bucket{status=\"success\"}[$__rate_interval])))",
           "format": "time_series",
@@ -1220,7 +1252,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.50, sum by (le) (rate(openoutbox_publisher_latency_seconds_bucket{job=\"open-outbox-relay\"}[$__rate_interval])))",
@@ -1237,7 +1269,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Time spent purely inside the Publisher's Publish method. Measures the latency of the outbound leg (Kafka/NATS/etc). High latency here usually indicates target congestion or network saturation.",
       "fieldConfig": {
@@ -1318,6 +1350,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "sum by (le) (rate(openoutbox_publisher_latency_seconds_bucket{status=\"success\"}[$__rate_interval]))",
           "format": "heatmap",
@@ -1332,7 +1368,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "This panel measures the responsiveness of the underlying database for core operations: Claiming (locking pending events) and Deletion (removing processed events). Because the Outbox pattern is database-intensive, monitoring these P99 latencies is critical for identifying lock contention, index inefficiency, or table bloat before they impact global throughput.",
       "fieldConfig": {
@@ -1420,6 +1456,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(openoutbox_storage_latency_seconds_bucket{op=\"claim\"}[$__rate_interval])))",
           "legendFormat": "Claim",
@@ -1429,7 +1469,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(openoutbox_storage_latency_seconds_bucket{op=\"mark_delivered\"}[$__rate_interval])))",
@@ -1441,7 +1481,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le) (rate(openoutbox_storage_latency_seconds_bucket{op=\"mark_failed\"}[$__rate_interval])))",
@@ -1470,7 +1510,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Visualizes the percentage of events that resulted in a terminal failure relative to total processing volume. In a healthy system, this should remain near 0%. Persistent values here indicate downstream broker outages, schema mismatches, or exhausted retries.",
       "fieldConfig": {
@@ -1564,7 +1604,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "(sum(rate(openoutbox_events_total{status=\"failed\"}[$__rate_interval])) / sum(rate(openoutbox_events_total[$__rate_interval]))) * 100",
@@ -1579,7 +1619,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Displays the current number of failed event deliveries per second. Shows the absolute impact on the system and downstream consumers.",
       "fieldConfig": {
@@ -1669,6 +1709,10 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "sum(rate(openoutbox_events_total{status=\"failed\"}[$__rate_interval]))",
           "legendFormat": "",
@@ -1683,7 +1727,13 @@
   "preload": false,
   "refresh": "auto",
   "schemaVersion": 42,
-  "tags": [],
+  "tags": [
+    "Open Outbox",
+    "Messaging",
+    "Kafka",
+    "Redis",
+    "NATS"
+  ],
   "templating": {
     "list": [
       {
@@ -1712,6 +1762,20 @@
         "query": "100, 500, 1000, 5000, 10000, 50000",
         "type": "custom",
         "valuesFormat": "csv"
+      },
+      {
+        "current": {
+          "text": "Prometheus",
+          "value": "PBFA97CFB590B2093"
+        },
+        "description": "The main data source for Open Outbox dashboard",
+        "label": "Prometheus Data source",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
       }
     ]
   },
