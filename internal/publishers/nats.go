@@ -48,6 +48,7 @@ func (n *Nats) Connect(_ context.Context) error {
 		n.url,
 		nats.Timeout(n.connectionTimeout),
 		nats.Name("Open-Outbox-Relay"),
+		nats.MaxReconnects(-1),
 	)
 	if err != nil {
 		return fmt.Errorf("nats connection failed: %w", err)

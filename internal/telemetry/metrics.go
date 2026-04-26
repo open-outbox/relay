@@ -38,6 +38,10 @@ type Metrics struct {
 	// OldestPendingSeconds tracks the age of the oldest pending event in the
 	// queue, providing a direct measurement of "lag".
 	OldestPendingSeconds metric.Int64Gauge
+
+	// RelayStatusGauge represents the current operational state of the relay:
+	// 1 = Active, 2 = Paused (Publisher Down), 3 = Error (Infrastructure Failure).
+	RelayStateGauge metric.Int64Gauge
 }
 
 // NewMetrics initializes the Metrics struct by creating instruments through
@@ -109,6 +113,15 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 		"openoutbox.backlog.oldest_age_seconds",
 		metric.WithDescription("Age of the oldest pending event in the outbox table."),
 		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.RelayStateGauge, err = meter.Int64Gauge(
+		"openoutbox.relay.state",
+		metric.WithDescription("Current state of of the relay engine."),
+		metric.WithUnit(""),
 	)
 	if err != nil {
 		return nil, err

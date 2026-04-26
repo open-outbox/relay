@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,8 +18,28 @@ import (
 )
 
 const (
-	defaultWatchInterval = 30 * time.Second
+	defaultWatchInterval       = 30 * time.Second
+	defaultHealthCheckInterval = 5 * time.Second
 )
+
+// State represents the current operational state of the engine.
+// It is reported via the StateGauge to provide observability into
+// whether the engine is healthy, throttled, or failing.
+type State int64
+
+// Relay Status Constants
+const (
+	// StateActive: Everything is fine. The engine is polling.
+	StateActive State = 1
+	// StatePaused: The publisher (Kafka/NATS) is down. We are standing by.
+	StatePaused State = 2
+	// StateError: A critical error occurred (like a DB connection failure).
+	StateError State = 3
+)
+
+// ErrPublisherPaused is returned when the engine cannot proceed because
+// the publisher (e.g., Kafka, NATS, Redis) is currently unreachable or down.
+var ErrPublisherPaused = errors.New("publisher is paused")
 
 // Engine coordinates the movement of events from Storage to Publisher.
 // It manages the polling loop, background maintenance tasks like lease reaping,
@@ -40,6 +61,9 @@ type Engine struct {
 	tracer                        trace.Tracer
 	meter                         metric.Meter
 	events                        []Event
+	isHealthy                     atomic.Bool
+	healthCheckInterval           time.Duration
+	lastStatus                    State
 }
 
 // EngineParams handles the tuning and identity.
@@ -52,6 +76,7 @@ type EngineParams struct {
 	LeaseTimeout                  time.Duration
 	ReapBatchSize                 int
 	PublisherConnectRetryInterval time.Duration
+	HealthCheckInterval           time.Duration
 	RetryPolicy                   RetryPolicy
 	EnableBatchPublish            bool
 }
@@ -71,6 +96,10 @@ func NewEngine(
 		return nil, fmt.Errorf("engine cannot poll with batch size 0")
 	}
 
+	if params.HealthCheckInterval <= 0 {
+		params.HealthCheckInterval = defaultHealthCheckInterval
+	}
+
 	return &Engine{
 		relayID:                       params.RelayID,
 		storage:                       storage,
@@ -87,6 +116,7 @@ func NewEngine(
 		tracer:                        tel.Tracer,
 		meter:                         tel.Meter,
 		events:                        make([]Event, params.BatchSize),
+		healthCheckInterval:           params.HealthCheckInterval,
 	}, nil
 }
 
@@ -98,30 +128,17 @@ func NewEngine(
 // It blocks until the context is cancelled or a critical error occurs.
 func (e *Engine) Start(ctx context.Context) error {
 
-	// Ensure the publisher is ready before doing anything else.
-	for {
-		e.logger.Info("attempting to connect to publisher...",
-			zap.String("relay_id", e.relayID))
-
-		err := e.publisher.Connect(ctx)
-		if err == nil {
-			e.logger.Info("connected to publisher")
-			break
-		}
-
-		e.logger.Warn("publisher is not ready, retrying...",
-			zap.Error(err),
-			zap.Duration("retry_interval", e.publisherConnectRetryInterval))
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(e.publisherConnectRetryInterval):
-			continue
-		}
+	if err := e.connectToPublisher(ctx); err != nil {
+		return err
 	}
+	e.lastStatus = StateActive
 
 	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return e.monitorHealth(gCtx)
+	})
+
 	g.Go(func() error {
 		return e.watchBacklog(gCtx)
 	})
@@ -137,23 +154,36 @@ func (e *Engine) Start(ctx context.Context) error {
 				return gCtx.Err()
 			default:
 				count, err := e.process(gCtx)
+
+				var currentStatus State
+				waitInterval := e.interval
+
 				if err != nil {
-					e.logIfError(err, "Batch processing failed")
-					// On error, wait before retrying to prevent log spam/CPU burn
-					select {
-					case <-gCtx.Done():
-						return gCtx.Err()
-					case <-time.After(e.interval):
-						continue
+					if errors.Is(err, ErrPublisherPaused) {
+						currentStatus = StatePaused
+						waitInterval = e.healthCheckInterval
+					} else {
+						currentStatus = StateError
+						waitInterval = e.interval
+						e.logIfError(err, "Batch processing failed")
 					}
+				} else {
+					currentStatus = StateActive
+				}
+
+				if currentStatus != e.lastStatus {
+					e.metrics.RelayStateGauge.Record(gCtx, int64(currentStatus),
+						metric.WithAttributes(attribute.String("relay_id", e.relayID)),
+					)
+					e.lastStatus = currentStatus
 				}
 
 				// If the batch was empty, wait for the next interval
-				if count == 0 {
+				if err != nil || count == 0 {
 					select {
 					case <-gCtx.Done():
 						return gCtx.Err()
-					case <-time.After(e.interval):
+					case <-time.After(waitInterval):
 						continue
 					}
 				}
@@ -212,7 +242,7 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 
 	_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
 
-	e.logIfError(err, "failed to fetch events.", zap.Error(err))
+	e.logIfError(err, "failed to reap expired leases.", zap.Error(err))
 
 	for {
 		select {
@@ -220,12 +250,16 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
-			e.logIfError(err, "failed to fetch events.", zap.Error(err))
+			e.logIfError(err, "failed to reap expired leases.", zap.Error(err))
 		}
 	}
 }
 
 func (e *Engine) process(ctx context.Context) (int, error) {
+
+	if !e.isHealthy.Load() {
+		return 0, ErrPublisherPaused
+	}
 
 	e.logger.Debug("Engine processing...")
 
@@ -523,6 +557,71 @@ func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 			attribute.String("relay_id", e.relayID),
 		),
 	)
+}
+
+func (e *Engine) connectToPublisher(ctx context.Context) error {
+	// Ensure the publisher is ready before doing anything else.
+	for {
+		e.logger.Info("attempting to connect to publisher...",
+			zap.String("relay_id", e.relayID))
+
+		err := e.publisher.Connect(ctx)
+		if err == nil {
+			e.metrics.RelayStateGauge.Record(ctx, int64(StateActive),
+				metric.WithAttributes(
+					attribute.String("relay_id", e.relayID),
+				),
+			)
+			e.isHealthy.Store(true)
+			e.logger.Info("connected to publisher")
+			break
+		}
+
+		e.logger.Warn("publisher is not ready, retrying...",
+			zap.Error(err),
+			zap.Duration("retry_interval", e.publisherConnectRetryInterval))
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(e.publisherConnectRetryInterval):
+			continue
+		}
+	}
+	return nil
+}
+
+func (e *Engine) monitorHealth(ctx context.Context) error {
+	ticker := time.NewTicker(e.healthCheckInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := e.publisher.Ping(ctx); err != nil {
+				if e.isHealthy.Swap(false) {
+					e.metrics.RelayStateGauge.Record(ctx, int64(StatePaused),
+						metric.WithAttributes(
+							attribute.String("relay_id", e.relayID),
+						),
+					)
+					e.logger.Error(
+						"Publisher health check failed. Pausing engine.",
+						zap.String("relay_id", e.relayID),
+					)
+				}
+			} else {
+				if !e.isHealthy.Swap(true) {
+					e.metrics.RelayStateGauge.Record(ctx, int64(StateActive),
+						metric.WithAttributes(
+							attribute.String("relay_id", e.relayID),
+						),
+					)
+					e.logger.Info("Publisher health restored. Resuming engine.", zap.String("relay_id", e.relayID))
+				}
+			}
+		}
+	}
 }
 
 func (e *Engine) logIfError(err error, msg string, fields ...zap.Field) {
