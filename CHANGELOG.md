@@ -3,6 +3,12 @@
 All notable changes to the **Open Outbox Relay** will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### ✨ Added
+
+- **Remote Configuration:** Support for fetching configuration from Consul and etcd3.
+
 ## [1.0.0] - 2026-05-04
 
 ### ✨ Added

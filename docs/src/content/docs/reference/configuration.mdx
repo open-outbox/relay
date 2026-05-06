@@ -501,3 +501,61 @@ The maximum time the OpenTelemetry SDK will wait for a batch of spans to be expo
 
 The interval between two consecutive batch exports. Reducing this value decreases memory usage by clearing spans
 more frequently, but increases CPU and network overhead.
+
+---
+
+
+## Remote Configuration
+
+These settings allow the Relay to bootstrap its configuration from external key-value stores, enabling
+centralized management across multiple instances.
+
+---
+
+### `REMOTE_CONFIG_PROVIDER`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+
+**Default:** —
+
+Determines the external source for centralized configuration. When set, the relay will attempt to
+bootstrap its settings from the specified provider. Supported values are `consul`, `etcd`, `etcd3`,
+and `firestore`.
+
+---
+
+### `REMOTE_CONFIG_ENDPOINT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+
+**Default:** —
+
+The network address of the configuration provider. For example, `localhost:8500` for a
+local Consul agent or `etcd-cluster:2379` for an `etcd` deployment.
+
+---
+
+### `REMOTE_CONFIG_PATH`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+
+**Default:** —
+
+The specific key or file path within the provider where the configuration blob
+is stored (e.g., `config/relay.yaml`).
+
+---
+
+### `REMOTE_CONFIG_TYPE`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+
+**Default:** `yaml`
+
+Specifies the encoding format of the remote configuration blob. This ensures
+the relay uses the correct parser after fetching the data.
+Supported values are `yaml` and `json`.

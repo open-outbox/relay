@@ -84,7 +84,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 
 			case "mysql":
 				// return storage.NewMySQL(cfg.DatabaseURL), nil (To be implemented)
-				return nil, fmt.Errorf("mysql storage not yet implemented")
+				return nil, fmt.Errorf("mysql storage is not implemented yet")
 
 			default:
 				return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)

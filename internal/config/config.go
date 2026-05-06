@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	// Import remote to register remote config providers (Consul, etcd, etc.) with Viper
+	_ "github.com/spf13/viper/remote"
 )
 
 // Environment represents the operational mode of the relay.
@@ -206,6 +208,26 @@ type Config struct {
 	//	Note: In an Outbox Relay, "all" is the recommended setting to maintain
 	//	strict "At-Least-Once" delivery guarantees.
 	KafkaRequiredAcks string `mapstructure:"KAFKA_REQUIRED_ACKS"`
+
+	// RemoteConfigProvider determines the external source for configuration.
+	// Supported providers: "etcd3", "consul", or "firestore".
+	//  Default: ""
+	RemoteConfigProvider string `mapstructure:"REMOTE_CONFIG_PROVIDER"`
+
+	// RemoteConfigEndpoint is the network address of the configuration provider
+	// (e.g., "127.0.0.1:8500" for Consul or "etcd-cluster:2379").
+	//  Default: ""
+	RemoteConfigEndpoint string `mapstructure:"REMOTE_CONFIG_ENDPOINT"`
+
+	// RemoteConfigPath specifies the key or file path within the provider
+	// where the configuration blob is stored (e.g., "/config/relay.yaml").
+	//  Default: ""
+	RemoteConfigPath string `mapstructure:"REMOTE_CONFIG_PATH"`
+
+	// RemoteConfigType defines the format of the remote configuration blob.
+	// This ensures the engine knows how to parse the incoming data (e.g., "yaml", "json").
+	//  Default: "yaml"
+	RemoteConfigType string `mapstructure:"REMOTE_CONFIG_TYPE"`
 }
 
 // Load initializes the Config struct by merging defaults, environment variables,
@@ -258,9 +280,28 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
 
+	//Remote config settings
+	v.SetDefault("REMOTE_CONFIG_TYPE", "yaml")
+
 	// Bind all struct tags to Viper's internal registry
 	if err := bindEnvs(v, Config{}); err != nil {
 		return nil, fmt.Errorf("failed to bind env vars: %w", err)
+	}
+
+	provider := v.GetString("REMOTE_CONFIG_PROVIDER") // e.g. "consul" or "etcd3"
+	endpoint := v.GetString("REMOTE_CONFIG_ENDPOINT")
+	path := v.GetString("REMOTE_CONFIG_PATH")
+
+	if provider != "" && endpoint != "" && path != "" {
+		v.SetConfigType(v.GetString("REMOTE_CONFIG_TYPE"))
+
+		if err := v.AddRemoteProvider(provider, endpoint, path); err != nil {
+			return nil, fmt.Errorf("failed to setup remote provider: %w", err)
+		}
+
+		if err := v.ReadRemoteConfig(); err != nil {
+			return nil, fmt.Errorf("failed to read remote config: %w", err)
+		}
 	}
 
 	// Loading Optional Local Configuration from .env
@@ -274,10 +315,7 @@ func Load() (*Config, error) {
 			println("WRN: Failed to read existing .env file:", err.Error())
 		}
 	} else {
-		// Visual confirmation for developers that local overrides are active.
-		if v.GetString("ENVIRONMENT") == string(Development) {
-			println("INF: Configuration loaded from .env")
-		}
+		println("INF: Configuration loaded from .env")
 	}
 
 	// AutomaticEnv allows OS environment variables to override any file settings.
