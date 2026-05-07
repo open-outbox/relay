@@ -1,7 +1,6 @@
 # --- Load environment variables from .env if it exists ---
 ifneq (,$(wildcard ./.env))
     include .env
-    export
 endif
 
 FILTERED_ARGS := $(filter-out --,$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS)))

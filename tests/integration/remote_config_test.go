@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -38,17 +37,10 @@ PUBLISHER_TYPE: kafka
 `
 	seedConsul(t, endpoint, url, configYaml)
 
-	os.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
-	os.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
-	os.Setenv("REMOTE_CONFIG_PATH", "config/relay.yaml")
-	os.Setenv("REMOTE_CONFIG_TYPE", "yaml")
-
-	t.Cleanup(func() {
-		os.Unsetenv("REMOTE_CONFIG_PROVIDER")
-		os.Unsetenv("REMOTE_CONFIG_ENDPOINT")
-		os.Unsetenv("REMOTE_CONFIG_PATH")
-		os.Unsetenv("REMOTE_CONFIG_TYPE")
-	})
+	t.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
+	t.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
+	t.Setenv("REMOTE_CONFIG_PATH", "config/relay.yaml")
+	t.Setenv("REMOTE_CONFIG_TYPE", "yaml")
 
 	cfg, err := config.Load()
 
@@ -67,15 +59,9 @@ func TestLoad_RemoteConsul_KeyNotFound(t *testing.T) {
 	endpoint, _ := consulContainer.ApiEndpoint(ctx)
 
 	// 2. Point to a path that we NEVER seeded
-	os.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
-	os.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
-	os.Setenv("REMOTE_CONFIG_PATH", "non/existent/path.yaml")
-
-	t.Cleanup(func() {
-		os.Unsetenv("REMOTE_CONFIG_PROVIDER")
-		os.Unsetenv("REMOTE_CONFIG_ENDPOINT")
-		os.Unsetenv("REMOTE_CONFIG_PATH")
-	})
+	t.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
+	t.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
+	t.Setenv("REMOTE_CONFIG_PATH", "non/existent/path.yaml")
 
 	cfg, err := config.Load()
 
