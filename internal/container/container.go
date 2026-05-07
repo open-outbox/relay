@@ -140,6 +140,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				ReapBatchSize:                 cfg.ReapBatchSize,
 				PublisherConnectRetryInterval: cfg.PublisherConnectRetryInterval,
 				HealthCheckInterval:           cfg.HealthCheckInterval,
+				EnableStats:                   cfg.EnableStats,
 				RetryPolicy:                   retruPolicy,
 			}
 
