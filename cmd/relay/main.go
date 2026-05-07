@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/telemetry"
@@ -21,6 +22,9 @@ import (
 
 // main initializes the application and starts the main execution loop.
 func main() {
+	// Needed for OTEL related environment variables
+	// that are not included in config.Config
+	_ = godotenv.Load()
 	if err := run(); err != nil {
 		log.Fatalf("Relay terminated with error: %v", err)
 	}
