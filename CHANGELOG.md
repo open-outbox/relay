@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Remote Configuration:** Support for fetching configuration from Consul and etcd3.
 
+### 🛡️ Fixed
+
+- **Integration Test Conflicts:** Resolved an issue where local environment variables
+were unintentionally overriding remote configuration providers during testing.
+
 ## [1.0.0] - 2026-05-04
 
 ### ✨ Added
