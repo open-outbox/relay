@@ -33,6 +33,8 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
 	t.Setenv("POLL_INTERVAL", "100ms")
 	t.Setenv("BATCH_SIZE", "10")
 	t.Setenv("LEASE_TIMEOUT", "5s") // Small lease for fast testing
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Seed the Database
 	eventID := uuid.New()
@@ -106,6 +108,8 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	t.Setenv("POLL_INTERVAL", "100ms")
 	t.Setenv("LEASE_TIMEOUT", "1m")
 	t.Setenv("REDIS_WRITE_TIMEOUT", "100ms")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Build and Start Engine
 	di, err := container.BuildContainer(ctx)

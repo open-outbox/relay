@@ -11,7 +11,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
+
 	// Import remote to register remote config providers (Consul, etcd, etc.) with Viper
 	_ "github.com/spf13/viper/remote"
 )
@@ -329,11 +331,13 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if cfg.RelayID == "" {
+		cfg.RelayID = generateRelayID()
+	}
+
 	return &cfg, nil
 }
 
-// bindEnvs tells Viper to look for environment variables for every
-// field defined in the Config struct.
 func bindEnvs(v *viper.Viper, iface interface{}) error {
 	ifaceVal := reflect.ValueOf(iface)
 	ifaceType := ifaceVal.Type()
@@ -348,4 +352,15 @@ func bindEnvs(v *viper.Viper, iface interface{}) error {
 		}
 	}
 	return nil
+}
+
+func generateRelayID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown-relay"
+	}
+
+	suffix := uuid.New().String()[:4]
+
+	return fmt.Sprintf("%s-%s", hostname, suffix)
 }

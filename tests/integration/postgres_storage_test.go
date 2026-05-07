@@ -1,4 +1,4 @@
-//go:build integrationx
+//go:build integration
 
 package integration
 
@@ -7,16 +7,17 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func TestPostgresStorage(t *testing.T) {
 	ctx := context.Background()
 	tableName := "openoutbox_events"
-	logger := zap.NewNop()
+	relayID := "storage1"
+	relayID2 := "storage2"
 
 	// Start Docker Postgres & get connection pool
 	// Assuming setupTestPostgres returns (*sql.DB, string)
@@ -26,13 +27,22 @@ func TestPostgresStorage(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
+	tel, err := relay.CreateNoopTelemetry()
+	assert.NoError(t, err)
+
 	// Initialize the Storage implementation
-	store, err := storage.NewPostgres(pool, tableName, logger)
+	store, err := storage.NewPostgres(pool, tableName, relayID, tel)
 	require.NoError(t, err)
 	defer store.Close(ctx)
 
+	store2, err := storage.NewPostgres(pool, tableName, relayID2, tel)
+	require.NoError(t, err)
+	defer store2.Close(ctx)
+
 	// Ping the connection
 	err = store.Ping(ctx)
+	assert.NoError(t, err)
+	err = store2.Ping(ctx)
 	assert.NoError(t, err)
 
 	// Truncate
@@ -43,5 +53,5 @@ func TestPostgresStorage(t *testing.T) {
 	seeder := &PostgresSeeder{t: t, ctx: ctx, pool: pool, tableName: "openoutbox_events"}
 
 	// Run the contract battery
-	runStorageContractTest(t, store, seeder, truncate)
+	runStorageContractTest(t, store, store2, seeder, truncate)
 }

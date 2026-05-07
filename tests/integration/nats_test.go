@@ -32,6 +32,8 @@ func TestNatsHappyPath(t *testing.T) {
 	t.Setenv("PUBLISHER_URL", natsUrl)
 	t.Setenv("POLL_INTERVAL", "100ms")
 	t.Setenv("BATCH_SIZE", "10")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Build Application via DI Container
 	di, err := container.BuildContainer(ctx)
@@ -107,6 +109,8 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 	t.Setenv("PUBLISHER_TYPE", "nats")
 	t.Setenv("PUBLISHER_URL", natsUrl)
 	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	di, _ := container.BuildContainer(ctx)
 

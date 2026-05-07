@@ -74,7 +74,8 @@ The Relay exposes standard OpenTelemetry metrics to monitor the health, throughp
 
 <Badge text="Histogram" variant="note" /> <Badge text="{event}" variant="tip" />
 
-Tracks the number of events fetched from the database in a single claim operation. This helps monitor if the relay is keeping up with the ingestion rate.
+Tracks the number of events fetched from the database in a single claim operation. This helps monitor if the
+relay is keeping up with the ingestion rate.
 
 ---
 
@@ -87,11 +88,20 @@ Tracks the total number of events processed.
 
 ---
 
+### `openoutbox.events.reaped`
+
+<Badge text="Counter" variant="note" /> <Badge text="{status}" variant="tip" />
+
+Tracks the total number of expired or stuck event leases that reclaimed by the maintenance routine.
+
+---
+
 ### `openoutbox.events.e2e_latency`
 
 <Badge text="Histogram" variant="note" /> <Badge text="seconds" variant="tip" />
 
-Measures the total time elapsed from the moment an event was created in the database until it was successfully acknowledged by the message broker.
+Measures the total time elapsed from the moment an event was created in the database until it was
+successfully acknowledged by the message broker.
 * **Attributes:** `type` (event type).
 
 ---
@@ -101,7 +111,7 @@ Measures the total time elapsed from the moment an event was created in the data
 <Badge text="Histogram" variant="note" /> <Badge text="seconds" variant="tip" />
 
 Measures the duration of individual database operations.
-* **Attributes:** `op` (e.g., `claim`, `mark_delivered`, `mark_failed`).
+* **Attributes:** `op` (e.g., `claim`, `mark_delivered`, etc.), `status` (success/failed)
 
 ---
 

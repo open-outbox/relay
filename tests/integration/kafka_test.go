@@ -29,6 +29,8 @@ func TestKafkaHappyPath(t *testing.T) {
 	t.Setenv("PUBLISHER_TYPE", "kafka")
 	t.Setenv("PUBLISHER_URL", kafkaBrokers)
 	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	di, _ := container.BuildContainer(ctx)
 	err := di.Invoke(func(pub relay.Publisher) {
@@ -87,6 +89,8 @@ func TestKafka_PublishFailure_IncrementsAttempts(t *testing.T) {
 	t.Setenv("PUBLISHER_TYPE", "kafka")
 	t.Setenv("PUBLISHER_URL", kafkaBrokers)
 	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Force a failure: Set a tiny timeout so the publish fails
 	t.Setenv("KAFKA_WRITE_TIMEOUT", "1ms")

@@ -16,6 +16,10 @@ type Metrics struct {
 	// Typical attributes include 'status' (success/failed) and 'type' (event type).
 	EventsTotal metric.Int64Counter
 
+	// ReapedTotal is a counter that tracks the number of events recovered from expired leases.
+	// High values typically indicate worker crashes or a LEASE_TIMEOUT that is too aggressive.
+	ReapedTotal metric.Int64Counter
+
 	// EndToEndLatency measures the total time elapsed from the moment an event
 	// was created in the database until it was successfully acknowledged by
 	// the message broker.
@@ -65,6 +69,17 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 	m.EventsTotal, err = meter.Int64Counter(
 		"openoutbox.events.total",
 		metric.WithDescription("Total number of events processed by the relay."),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.ReapedTotal, err = meter.Int64Counter(
+		"openoutbox.events.reaped",
+		metric.WithDescription(
+			"Total number of events recovered from expired leases by the relay.",
+		),
 		metric.WithUnit("{event}"),
 	)
 	if err != nil {
