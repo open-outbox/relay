@@ -7,12 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### ✨ Added
 
-- **Remote Configuration:** Support for fetching configuration from Consul and etcd3.
+- **Remote Configuration:** Support for fetching configuration from `Consul` and `etcd3`.
+- **Observability Middleware:** Introduced `Instrumented` storage to decouple telemetry from database logic and engine.
+- **New Metrics:** Added `openoutbox_events_reaped` counter to track event recovery activity.
+- **Enhanced Dashboards:** Added Grafana panels for Reaping Rates and specific storage operations (latency/throughput).
+- **OTel Infrastructure:** Upgraded OpenTelemetry Collector configuration to use current (non-deprecated) schema.
+
+### Changed
+
+- **Storage Interface**: `MarkDeliveredBatch` and `MarkFailedBatch` now return the number of affected rows (`int64`).
+- **Observability**: Moved lease expiration warnings from the database drivers to the `InstrumentedStorage` layer for better separation of concerns.
+- **Clean Architecture:** Removed `relay_id` from the global Storage interface, delegating identity handling to specific implementations.
+
+### Fixed
+
+- Improved telemetry accuracy by ensuring lease expiration is tracked within the instrumentation decorator
+rather than the core storage implementation.
 
 ### 🛡️ Fixed
 
 - **Integration Test Conflicts:** Resolved an issue where local environment variables
 were unintentionally overriding remote configuration providers during testing.
+- **Engine Initialization:** Resolved a bug where the `EnableStats` flag was uninitialized in the engine container.
 
 ## [1.0.0] - 2026-05-04
 

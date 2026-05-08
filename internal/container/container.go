@@ -6,10 +6,8 @@ package container
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
 	"github.com/open-outbox/relay/internal/publishers"
@@ -68,15 +66,14 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			}
 		},
 		// Storage provider: selects and initializes the DB driver based on configuration.
-		func(ctx context.Context, cfg *config.Config, logger *zap.Logger) (relay.Storage, error) {
-
+		func(ctx context.Context, cfg *config.Config, tel telemetry.Telemetry) (relay.Storage, error) {
 			switch cfg.StorageType {
 			case "postgres":
 				pool, err := pgxpool.New(ctx, cfg.StorageURL)
 				if err != nil {
 					return nil, err
 				}
-				postgres, err := storage.NewPostgres(pool, cfg.StorageTableName, logger)
+				postgres, err := storage.NewPostgres(pool, cfg.StorageTableName, cfg.RelayID, tel)
 				if err != nil {
 					return nil, err
 				}
@@ -135,25 +132,22 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				Jitter:      cfg.RetryJitter,
 			}
 
-			relayID := cfg.RelayID
-			if relayID == "" {
-				relayID = generateRelayID()
-			}
-
 			params := relay.EngineParams{
-				RelayID:                       relayID,
+				RelayID:                       cfg.RelayID,
 				Interval:                      cfg.PollInterval,
 				BatchSize:                     cfg.BatchSize,
 				LeaseTimeout:                  cfg.LeaseTimeout,
 				ReapBatchSize:                 cfg.ReapBatchSize,
 				PublisherConnectRetryInterval: cfg.PublisherConnectRetryInterval,
 				HealthCheckInterval:           cfg.HealthCheckInterval,
+				EnableStats:                   cfg.EnableStats,
 				RetryPolicy:                   retruPolicy,
 			}
 
-			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel, relayID)
+			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel, cfg.RelayID)
+			instrumentedStorage := storage.NewInstrumented(s, tel, cfg.RelayID)
 
-			return relay.NewEngine(s, instrumentedPublisher, params, tel)
+			return relay.NewEngine(instrumentedStorage, instrumentedPublisher, params, tel)
 		},
 		// Server provider: provides the HTTP server used for health checks and Prometheus metrics.
 		func(
@@ -234,15 +228,4 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		Compression:       comp,
 	}
 	return publishers.NewKafka(kCfg)
-}
-
-func generateRelayID() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown-relay"
-	}
-
-	suffix := uuid.New().String()[:4]
-
-	return fmt.Sprintf("%s-%s", hostname, suffix)
 }

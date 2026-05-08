@@ -21,11 +21,10 @@ type MockStorage struct {
 // ClaimBatch mocks the retrieval and locking of a batch of events.
 func (m *MockStorage) ClaimBatch(
 	ctx context.Context,
-	relayID string,
 	size int,
 	buffer []Event,
 ) ([]Event, error) {
-	args := m.Called(ctx, relayID, size, buffer)
+	args := m.Called(ctx, size, buffer)
 	return args.Get(0).([]Event), args.Error(1)
 }
 
@@ -33,20 +32,18 @@ func (m *MockStorage) ClaimBatch(
 func (m *MockStorage) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-	relayID string,
-) error {
-	args := m.Called(ctx, ids, relayID)
-	return args.Error(0)
+) (int64, error) {
+	args := m.Called(ctx, ids)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // MarkFailedBatch mocks the recording of processing failures and retry metadata.
 func (m *MockStorage) MarkFailedBatch(
 	ctx context.Context,
 	failed []FailedEvent,
-	relayID string,
-) error {
-	args := m.Called(ctx, failed, relayID)
-	return args.Error(0)
+) (int64, error) {
+	args := m.Called(ctx, failed)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // GetStats mocks the retrieval of operational metrics from the storage layer.

@@ -111,7 +111,7 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 
 	store.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(f []relay.FailedEvent) bool {
 		return len(f) == 1 && f[0].ID == eventID && f[0].NewStatus == relay.EventStatusDead
-	}), mock.Anything).Return(nil).Once()
+	}), mock.Anything).Return(int64(0), nil).Once()
 
 	// Silence background noise
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
@@ -161,23 +161,23 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 	}
 
 	// First call: Return a FULL batch (10/10)
-	store.On("ClaimBatch", mock.Anything, mock.Anything, 10, mock.Anything).
+	store.On("ClaimBatch", mock.Anything, 10, mock.Anything).
 		Return(fullBatch, nil).Once()
 
 	// Second call: Return empty (simulating the drain is finished)
 	// If the engine is working correctly, this second call should happen
 	// almost instantly after the first, without waiting for the Interval.
-	store.On("ClaimBatch", mock.Anything, mock.Anything, 10, mock.Anything).
+	store.On("ClaimBatch", mock.Anything, 10, mock.Anything).
 		Return(fullBatch, nil).Once()
 
 	// Return an empty batch so that the engine will sleep for Interval duration
-	store.On("ClaimBatch", mock.Anything, mock.Anything, 10, mock.Anything).
+	store.On("ClaimBatch", mock.Anything, 10, mock.Anything).
 		Return([]relay.Event{}, nil).Once()
 
 	// Handle the publishing of the 10 events
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil).Times(20)
 	pub.On("Connect", mock.Anything).Return(nil)
-	store.On("MarkDeliveredBatch", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	store.On("MarkDeliveredBatch", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	// Silence background noise
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
@@ -224,6 +224,8 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	t.Setenv("LEASE_TIMEOUT", "5s")
 	t.Setenv("POLL_INTERVAL", "100ms")
 	t.Setenv("STORAGE_URL", pgConnStr)
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Point Kafka to a "Slow" address
 	// We use a real IP that won't respond (like 192.0.2.1) or just a closed port
@@ -272,8 +274,9 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	// It tries to mark the event as DELIVERED using its own ID.
 	di.Invoke(func(store relay.Storage) {
 		// We simulate the old worker's final DB call
-		err := store.MarkDeliveredBatch(ctx, []uuid.UUID{eventID}, oldWorkerID)
+		ra, err := store.MarkDeliveredBatch(ctx, []uuid.UUID{eventID})
 		require.NoError(t, err)
+		assert.Equal(t, int64(0), ra)
 	})
 
 	// FINAL INTEGRITY CHECK

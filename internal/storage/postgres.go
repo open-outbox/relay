@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/gommon/log"
 	"github.com/open-outbox/relay/internal/relay"
+	"github.com/open-outbox/relay/internal/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -137,6 +137,7 @@ const (
 type Postgres struct {
 	pool                    *pgxpool.Pool
 	logger                  *zap.Logger
+	relayID                 string
 	queryClaimBatch         string
 	queryMarkDeliveredBatch string
 	queryMarkFailedBatch    string
@@ -148,14 +149,19 @@ type Postgres struct {
 }
 
 // NewPostgres creates a new Postgres storage instance using the provided pgx connection pool.
-func NewPostgres(pool *pgxpool.Pool, tableName string, logger *zap.Logger) (*Postgres, error) {
+func NewPostgres(
+	pool *pgxpool.Pool,
+	tableName string,
+	relayID string,
+	tel telemetry.Telemetry,
+) (*Postgres, error) {
 	if err := ValidateTableName(tableName); err != nil {
 		return nil, err
 	}
-	logger.Info("postgres storage initialized", zap.String("table", tableName))
 	p := &Postgres{
-		pool:   pool,
-		logger: logger,
+		pool:    pool,
+		relayID: relayID,
+		logger:  tel.ScopedLogger("Postgres"),
 	}
 
 	p.queryClaimBatch = strings.ReplaceAll(sqlClaimBatch, "{{TABLE}}", tableName)
@@ -178,7 +184,6 @@ func NewPostgres(pool *pgxpool.Pool, tableName string, logger *zap.Logger) (*Pos
 // 3. Selected events are immediately marked as DELIVERING to "lease" them to this instance.
 func (p *Postgres) ClaimBatch(
 	ctx context.Context,
-	relayID string,
 	batchSize int,
 	buf []relay.Event,
 ) ([]relay.Event, error) {
@@ -191,7 +196,7 @@ func (p *Postgres) ClaimBatch(
 		relay.EventStatusPending,
 		batchSize,
 		relay.EventStatusDelivering,
-		relayID,
+		p.relayID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim batch: %w", err)
@@ -222,30 +227,29 @@ func (p *Postgres) ClaimBatch(
 	return buf[:i], nil
 }
 
-// MarkDeliveredBatch updates a set of events to the DELIVERED status.
-// It requires the relayID to match the current lock to ensure that an instance
-// doesn't accidentally mark an event as delivered if it has already been reaped.
+// MarkDeliveredBatch transitions a set of events to the DELIVERED status.
+// It verifies the lock against the current relay instance to prevent
+// updates on events that may have been reaped or re-assigned.
 func (p *Postgres) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-	relayID string,
-) error {
+) (int64, error) {
 	if len(ids) == 0 {
-		return nil
+		return 0, nil
 	}
 
-	_, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
+	res, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
 		relay.EventStatusDelivered,
 		ids,
 		relay.EventStatusDelivering,
-		relayID,
+		p.relayID,
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to mark batch delivered: %w", err)
+		return 0, fmt.Errorf("failed to mark batch delivered: %w", err)
 	}
 
-	return nil
+	return res.RowsAffected(), nil
 }
 
 // MarkFailedBatch updates multiple events that failed during publishing.
@@ -256,10 +260,9 @@ func (p *Postgres) MarkDeliveredBatch(
 func (p *Postgres) MarkFailedBatch(
 	ctx context.Context,
 	failures []relay.FailedEvent,
-	relayID string,
-) error {
+) (int64, error) {
 	if len(failures) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	n := len(failures)
@@ -284,18 +287,14 @@ func (p *Postgres) MarkFailedBatch(
 		attempts,
 		errors,
 		relay.EventStatusDelivering,
-		relayID,
+		p.relayID,
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to mark batch failures: %w", err)
+		return 0, fmt.Errorf("failed to mark batch failures: %w", err)
 	}
 
-	if res.RowsAffected() < int64(n) {
-		log.Warn("Lease expired during processing for some events")
-	}
-
-	return nil
+	return res.RowsAffected(), nil
 }
 
 // ReapExpiredLeases identifies and resets events that have been stuck in the DELIVERING

@@ -10,25 +10,29 @@ import (
 // Storage defines the contract for how the Relay reads and updates events.
 // Implementations are responsible for managing the persistence of outbox events
 type Storage interface {
-	// ClaimBatch identifies and locks a set of pending events for a specific relay instance.
-	// It transitions events to the 'DELIVERING' status and associates them with the relayID.
-	// The 'buffer' parameter allows for reusing a slice to minimize allocations.
+	// ClaimBatch identifies and locks a set of pending events for processing.
+	// It transitions events to the 'DELIVERING' status and ensures they are
+	// reserved for this relay instance to prevent duplicate processing.
+	//
+	// The 'buffer' parameter allows for reusing an existing slice to minimize
+	// heap allocations during high-throughput polling.
 	ClaimBatch(
 		ctx context.Context,
-		relayID string,
 		batchSize int,
 		buffer []Event,
 	) ([]Event, error)
 
-	// MarkDeliveredBatch moves events to the final 'DELIVERED' state.
-	// It must verify that the events are still locked by the provided relayID
-	// to prevent race conditions with the lease reaper.
-	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID, relayID string) error
+	// MarkDeliveredBatch moves a set of events to the final 'DELIVERED' state.
+	//
+	// The implementation must ensure that only events currently locked by
+	// this relay instance are updated, preventing race conditions or
+	// accidental overrides if a lease was previously reaped.
+	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID) (int64, error)
 
 	// MarkFailedBatch handles events that encountered errors during publishing.
 	// It updates event metadata (attempts, last_error) and determines if the event
 	// should be retried (PENDING) or quarantined (DEAD).
-	MarkFailedBatch(ctx context.Context, failures []FailedEvent, relayID string) error
+	MarkFailedBatch(ctx context.Context, failures []FailedEvent) (int64, error)
 
 	// ReapExpiredLeases identifies events stuck in the 'DELIVERING' state past their
 	// lease duration and resets them to 'PENDING', allowing other instances to pick them up.

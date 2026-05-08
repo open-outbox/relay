@@ -33,7 +33,7 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 	buffer := make([]Event, 2)
 
 	// Expect: Claim 1 event
-	mockStorage.On("ClaimBatch", ctx, relayID, 2, buffer).
+	mockStorage.On("ClaimBatch", ctx, 2, buffer).
 		Return([]Event{fakeEvent}, nil)
 
 	// Expect: Publish that 1 event
@@ -41,8 +41,8 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		Return(nil)
 
 	// Expect: Mark that 1 event as delivered
-	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}, relayID).
-		Return(nil)
+	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}).
+		Return(int64(0), nil)
 
 	mockPublisher.On("Connect", mock.Anything).Return(nil)
 
@@ -99,7 +99,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Return BOTH events
-	mockStorage.On("ClaimBatch", mock.Anything, relayID, 2, buffer).
+	mockStorage.On("ClaimBatch", mock.Anything, 2, buffer).
 		Return([]Event{event1, event2}, nil)
 
 	// Event 1: Publish Success
@@ -112,16 +112,16 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 
 	// Verify BOTH storage updates happen
 	// Success side:
-	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, relayID).
-		Return(nil)
+	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}).
+		Return(int64(0), nil)
 
 	mockPublisher.On("Connect", mock.Anything).Return(nil)
 
 	// Failure side: (Notice we check for id2 here)
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
-	}), relayID).
-		Return(nil)
+	})).
+		Return(int64(1), nil)
 
 	// Initialize Engine
 

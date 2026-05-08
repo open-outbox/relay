@@ -14,13 +14,13 @@ exporters:
 
   debug:
     verbosity: detailed
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: jaeger:4317
     sending_queue:
       batch:
     tls:
       insecure: true
-  otlphttp/prometheus:
+  otlp_http/prometheus:
     endpoint: "http://prometheus:9090/api/v1/otlp"
     sending_queue:
       enabled: true
@@ -33,8 +33,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug, otlp/jaeger]
+      exporters: [debug, otlp_grpc/jaeger]
     metrics:
       receivers: [otlp]
       processors: [batch/fast]
-      exporters: [otlphttp/prometheus, debug]
+      exporters: [otlp_http/prometheus, debug]

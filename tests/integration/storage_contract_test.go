@@ -16,6 +16,7 @@ import (
 func runStorageContractTest(
 	t *testing.T,
 	store relay.Storage,
+	store2 relay.Storage,
 	seed EventSeeder,
 	truncate func(),
 ) {
@@ -64,7 +65,7 @@ func runStorageContractTest(
 
 		// Claim first batch of 2
 		buf1 := make([]relay.Event, 5)
-		batch1, err := store.ClaimBatch(ctx, "worker-1", 2, buf1)
+		batch1, err := store.ClaimBatch(ctx, 2, buf1)
 
 		require.NoError(t, err)
 		assert.Len(t, batch1, 2)
@@ -73,7 +74,7 @@ func runStorageContractTest(
 
 		// Claim second batch of 2
 		buf2 := make([]relay.Event, 5)
-		batch2, err := store.ClaimBatch(ctx, "worker-1", 2, buf2)
+		batch2, err := store.ClaimBatch(ctx, 2, buf2)
 
 		require.NoError(t, err)
 		assert.Len(t, batch2, 2)
@@ -97,7 +98,7 @@ func runStorageContractTest(
 
 		// Claim the event
 		buf := make([]relay.Event, 1)
-		claimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf)
+		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 		require.Len(t, claimed, 1)
 
 		// Verify State Transition via immediate re-claim attempt
@@ -107,7 +108,7 @@ func runStorageContractTest(
 
 		// Verify Worker Isolation (The Exclusion rule)
 		buf2 := make([]relay.Event, 1)
-		claimedByOther, err := store.ClaimBatch(ctx, "worker-2", 1, buf2)
+		claimedByOther, err := store2.ClaimBatch(ctx, 1, buf2)
 		require.NoError(t, err)
 		assert.Empty(t, claimedByOther, "Worker 2 should not see events locked by Worker 1")
 	})
@@ -124,7 +125,7 @@ func runStorageContractTest(
 		})
 
 		buf := make([]relay.Event, 1)
-		claimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf)
+		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 		assert.Empty(t, claimed, "Event should be invisible until AvailableAt is reached")
 	})
 
@@ -139,14 +140,15 @@ func runStorageContractTest(
 		})
 
 		buf := make([]relay.Event, 1)
-		claimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf)
+		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 
-		err := store.MarkDeliveredBatch(ctx, []uuid.UUID{claimed[0].ID}, "worker-1")
+		ra, err := store.MarkDeliveredBatch(ctx, []uuid.UUID{claimed[0].ID})
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Verify it's effectively removed from the pending pool
 		buf2 := make([]relay.Event, 1)
-		reclaimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf2)
+		reclaimed, _ := store.ClaimBatch(ctx, 1, buf2)
 		assert.Empty(t, reclaimed)
 	})
 
@@ -162,7 +164,7 @@ func runStorageContractTest(
 		})
 
 		buf := make([]relay.Event, 1)
-		claimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf)
+		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 
 		// Simulate a retryable failure with a 50ms backoff
 		failTime := time.Now().Add(50 * time.Millisecond)
@@ -176,19 +178,20 @@ func runStorageContractTest(
 			},
 		}
 
-		err := store.MarkFailedBatch(ctx, failures, "worker-1")
+		ra, err := store.MarkFailedBatch(ctx, failures)
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Should not be claimable immediately
 		buf2 := make([]relay.Event, 1)
-		reclaimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf2)
+		reclaimed, _ := store.ClaimBatch(ctx, 1, buf2)
 		assert.Empty(t, reclaimed)
 
 		// After backoff, it should be claimable again
 		time.Sleep(150 * time.Millisecond)
 
 		// Reclaim and verify metadata update
-		reclaimed, err = store.ClaimBatch(ctx, "worker-1", 1, buf2)
+		reclaimed, err = store.ClaimBatch(ctx, 1, buf2)
 		assert.NoError(t, err)
 		assert.Len(t, reclaimed, 1)
 		assert.Equal(
@@ -211,7 +214,7 @@ func runStorageContractTest(
 		})
 
 		buf := make([]relay.Event, 1)
-		claimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf)
+		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 
 		// Simulate moving to DEAD after too many retries
 		failures := []relay.FailedEvent{
@@ -224,12 +227,13 @@ func runStorageContractTest(
 			},
 		}
 
-		err := store.MarkFailedBatch(ctx, failures, "worker-1")
+		ra, err := store.MarkFailedBatch(ctx, failures)
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Verify it's never claimable again
 		buf2 := make([]relay.Event, 1)
-		reclaimed, _ := store.ClaimBatch(ctx, "worker-1", 1, buf2)
+		reclaimed, _ := store.ClaimBatch(ctx, 1, buf2)
 		assert.Empty(t, reclaimed, "Dead events should never be claimed")
 	})
 
@@ -250,7 +254,7 @@ func runStorageContractTest(
 
 		// Event should now be PENDING and available for a new worker
 		buf := make([]relay.Event, 1)
-		reclaimed, _ := store.ClaimBatch(ctx, "new-worker", 1, buf)
+		reclaimed, _ := store.ClaimBatch(ctx, 1, buf)
 		assert.Len(t, reclaimed, 1)
 		assert.Equal(t, eventID, reclaimed[0].ID)
 	})
@@ -310,8 +314,7 @@ func runStorageContractTest(
 		)
 	})
 
-	t.Run("Maintenance/PruningLogic", func(t *testing.T) {
-		truncate()
+	runTest("Maintenance/PruningLogic", func(t *testing.T) {
 		now := time.Now().Truncate(time.Second)
 
 		// Seed events with different statuses and ages
@@ -424,12 +427,12 @@ func runStorageContractTest(
 	runTest("Claiming/BoundaryConditions", func(t *testing.T) {
 		// Test 0 batch size
 		buf := make([]relay.Event, 0)
-		claimed, err := store.ClaimBatch(ctx, "worker-1", 0, buf)
+		claimed, err := store.ClaimBatch(ctx, 0, buf)
 		assert.NoError(t, err)
 		assert.Empty(t, claimed)
 
 		// Test nil buffer
-		claimed, err = store.ClaimBatch(ctx, "worker-1", 10, nil)
+		claimed, err = store.ClaimBatch(ctx, 10, nil)
 		// Depending on your implementation, this should either
 		// error or return a freshly allocated slice.
 		assert.NoError(t, err)
@@ -437,7 +440,7 @@ func runStorageContractTest(
 
 	runTest("Claiming/EmptyStorage", func(t *testing.T) {
 		buf := make([]relay.Event, 10)
-		claimed, err := store.ClaimBatch(ctx, "worker-1", 10, buf)
+		claimed, err := store.ClaimBatch(ctx, 10, buf)
 		assert.NoError(t, err)
 		assert.Empty(t, claimed)
 	})
