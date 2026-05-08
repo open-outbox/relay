@@ -111,7 +111,7 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 
 	store.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(f []relay.FailedEvent) bool {
 		return len(f) == 1 && f[0].ID == eventID && f[0].NewStatus == relay.EventStatusDead
-	}), mock.Anything).Return(nil).Once()
+	}), mock.Anything).Return(int64(0), nil).Once()
 
 	// Silence background noise
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
@@ -177,7 +177,7 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 	// Handle the publishing of the 10 events
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil).Times(20)
 	pub.On("Connect", mock.Anything).Return(nil)
-	store.On("MarkDeliveredBatch", mock.Anything, mock.Anything).Return(nil)
+	store.On("MarkDeliveredBatch", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	// Silence background noise
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
@@ -274,8 +274,9 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	// It tries to mark the event as DELIVERED using its own ID.
 	di.Invoke(func(store relay.Storage) {
 		// We simulate the old worker's final DB call
-		err := store.MarkDeliveredBatch(ctx, []uuid.UUID{eventID})
+		ra, err := store.MarkDeliveredBatch(ctx, []uuid.UUID{eventID})
 		require.NoError(t, err)
+		assert.Equal(t, int64(0), ra)
 	})
 
 	// FINAL INTEGRITY CHECK

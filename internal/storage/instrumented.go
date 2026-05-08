@@ -89,13 +89,20 @@ func (i *Instrumented) ClaimBatch(
 func (i *Instrumented) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-) error {
+) (int64, error) {
 	ctx, span := i.tracer.Start(ctx, "Storage.MarkDeliveredBatch",
 		trace.WithAttributes(attribute.Int("batch.size", len(ids))))
 	defer span.End()
 
 	start := time.Now()
-	err := i.storage.MarkDeliveredBatch(ctx, ids)
+	rowsAffected, err := i.storage.MarkDeliveredBatch(ctx, ids)
+
+	if rowsAffected < int64(len(ids)) {
+		i.logger.Warn("Lease expired during processing for some events",
+			zap.Int64("expected", int64(len(ids))),
+			zap.Int64("actual", rowsAffected),
+		)
+	}
 
 	status := "success"
 	if err != nil {
@@ -113,7 +120,7 @@ func (i *Instrumented) MarkDeliveredBatch(
 		),
 	)
 
-	return err
+	return rowsAffected, err
 }
 
 // MarkFailedBatch updates events with failure details and schedules retries.
@@ -121,14 +128,21 @@ func (i *Instrumented) MarkDeliveredBatch(
 func (i *Instrumented) MarkFailedBatch(
 	ctx context.Context,
 	failures []relay.FailedEvent,
-) error {
+) (int64, error) {
 
 	ctx, span := i.tracer.Start(ctx, "Storage.MarkFailedBatch",
 		trace.WithAttributes(attribute.Int("batch.size", len(failures))))
 	defer span.End()
 
 	start := time.Now()
-	err := i.storage.MarkFailedBatch(ctx, failures)
+	rowsAffected, err := i.storage.MarkFailedBatch(ctx, failures)
+
+	if rowsAffected < int64(len(failures)) {
+		i.logger.Warn("Lease expired during processing for some events",
+			zap.Int64("expected", int64(len(failures))),
+			zap.Int64("actual", rowsAffected),
+		)
+	}
 
 	status := "success"
 	if err != nil {
@@ -146,7 +160,7 @@ func (i *Instrumented) MarkFailedBatch(
 		),
 	)
 
-	return err
+	return rowsAffected, err
 }
 
 // ReapExpiredLeases recovers events stuck in 'DELIVERING' status due to worker failure.

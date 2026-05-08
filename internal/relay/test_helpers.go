@@ -32,18 +32,18 @@ func (m *MockStorage) ClaimBatch(
 func (m *MockStorage) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-) error {
+) (int64, error) {
 	args := m.Called(ctx, ids)
-	return args.Error(0)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // MarkFailedBatch mocks the recording of processing failures and retry metadata.
 func (m *MockStorage) MarkFailedBatch(
 	ctx context.Context,
 	failed []FailedEvent,
-) error {
+) (int64, error) {
 	args := m.Called(ctx, failed)
-	return args.Error(0)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // GetStats mocks the retrieval of operational metrics from the storage layer.

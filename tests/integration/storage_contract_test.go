@@ -142,8 +142,9 @@ func runStorageContractTest(
 		buf := make([]relay.Event, 1)
 		claimed, _ := store.ClaimBatch(ctx, 1, buf)
 
-		err := store.MarkDeliveredBatch(ctx, []uuid.UUID{claimed[0].ID})
+		ra, err := store.MarkDeliveredBatch(ctx, []uuid.UUID{claimed[0].ID})
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Verify it's effectively removed from the pending pool
 		buf2 := make([]relay.Event, 1)
@@ -177,8 +178,9 @@ func runStorageContractTest(
 			},
 		}
 
-		err := store.MarkFailedBatch(ctx, failures)
+		ra, err := store.MarkFailedBatch(ctx, failures)
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Should not be claimable immediately
 		buf2 := make([]relay.Event, 1)
@@ -225,8 +227,9 @@ func runStorageContractTest(
 			},
 		}
 
-		err := store.MarkFailedBatch(ctx, failures)
+		ra, err := store.MarkFailedBatch(ctx, failures)
 		assert.NoError(t, err)
+		assert.Equal(t, int64(1), ra)
 
 		// Verify it's never claimable again
 		buf2 := make([]relay.Event, 1)

@@ -27,12 +27,12 @@ type Storage interface {
 	// The implementation must ensure that only events currently locked by
 	// this relay instance are updated, preventing race conditions or
 	// accidental overrides if a lease was previously reaped.
-	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID) error
+	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID) (int64, error)
 
 	// MarkFailedBatch handles events that encountered errors during publishing.
 	// It updates event metadata (attempts, last_error) and determines if the event
 	// should be retried (PENDING) or quarantined (DEAD).
-	MarkFailedBatch(ctx context.Context, failures []FailedEvent) error
+	MarkFailedBatch(ctx context.Context, failures []FailedEvent) (int64, error)
 
 	// ReapExpiredLeases identifies events stuck in the 'DELIVERING' state past their
 	// lease duration and resets them to 'PENDING', allowing other instances to pick them up.

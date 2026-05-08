@@ -233,12 +233,12 @@ func (p *Postgres) ClaimBatch(
 func (p *Postgres) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-) error {
+) (int64, error) {
 	if len(ids) == 0 {
-		return nil
+		return 0, nil
 	}
 
-	_, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
+	res, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
 		relay.EventStatusDelivered,
 		ids,
 		relay.EventStatusDelivering,
@@ -246,10 +246,10 @@ func (p *Postgres) MarkDeliveredBatch(
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to mark batch delivered: %w", err)
+		return 0, fmt.Errorf("failed to mark batch delivered: %w", err)
 	}
 
-	return nil
+	return res.RowsAffected(), nil
 }
 
 // MarkFailedBatch updates multiple events that failed during publishing.
@@ -260,9 +260,9 @@ func (p *Postgres) MarkDeliveredBatch(
 func (p *Postgres) MarkFailedBatch(
 	ctx context.Context,
 	failures []relay.FailedEvent,
-) error {
+) (int64, error) {
 	if len(failures) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	n := len(failures)
@@ -291,14 +291,10 @@ func (p *Postgres) MarkFailedBatch(
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to mark batch failures: %w", err)
+		return 0, fmt.Errorf("failed to mark batch failures: %w", err)
 	}
 
-	if res.RowsAffected() < int64(n) {
-		p.logger.Warn("Lease expired during processing for some events")
-	}
-
-	return nil
+	return res.RowsAffected(), nil
 }
 
 // ReapExpiredLeases identifies and resets events that have been stuck in the DELIVERING

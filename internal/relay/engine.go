@@ -311,13 +311,13 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	}
 
 	if len(successIDs) > 0 {
-		if err := e.storage.MarkDeliveredBatch(ctx, successIDs); err != nil {
+		if _, err := e.storage.MarkDeliveredBatch(ctx, successIDs); err != nil {
 			return 0, err
 		}
 	}
 
 	if len(failedEvents) > 0 {
-		if err := e.storage.MarkFailedBatch(ctx, failedEvents); err != nil {
+		if _, err := e.storage.MarkFailedBatch(ctx, failedEvents); err != nil {
 			return 0, err
 		}
 	}

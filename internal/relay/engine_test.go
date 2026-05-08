@@ -42,7 +42,7 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 
 	// Expect: Mark that 1 event as delivered
 	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}).
-		Return(nil)
+		Return(int64(0), nil)
 
 	mockPublisher.On("Connect", mock.Anything).Return(nil)
 
@@ -113,7 +113,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	// Verify BOTH storage updates happen
 	// Success side:
 	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}).
-		Return(nil)
+		Return(int64(0), nil)
 
 	mockPublisher.On("Connect", mock.Anything).Return(nil)
 
@@ -121,7 +121,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
 	})).
-		Return(nil)
+		Return(int64(1), nil)
 
 	// Initialize Engine
 
