@@ -144,7 +144,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				RetryPolicy:                   retruPolicy,
 			}
 
-			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel, cfg.RelayID)
+			instrumentedPublisher := publishers.NewInstrumented(p, tel, cfg.RelayID)
 			instrumentedStorage := storage.NewInstrumented(s, tel, cfg.RelayID)
 
 			return relay.NewEngine(instrumentedStorage, instrumentedPublisher, params, tel)

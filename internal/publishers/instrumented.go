@@ -14,10 +14,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// InstrumentedPublisher is a decorator that wraps a base relay.Publisher
+// Instrumented is a decorator that wraps a base relay.Publisher
 // to provide transparent observability. It automatically records OpenTelemetry
 // traces, Prometheus metrics, and structured logs for every publish operation.
-type InstrumentedPublisher struct {
+type Instrumented struct {
 	publisher relay.Publisher
 	logger    *zap.Logger
 	metrics   *telemetry.Metrics
@@ -26,14 +26,14 @@ type InstrumentedPublisher struct {
 	relayID   string
 }
 
-// NewInstrumentedPublisher returns a new publisher wrapper configured with the
+// NewInstrumented returns a new publisher wrapper configured with the
 // provided telemetry components.
-func NewInstrumentedPublisher(
+func NewInstrumented(
 	p relay.Publisher,
 	tel telemetry.Telemetry,
 	relayID string,
-) *InstrumentedPublisher {
-	return &InstrumentedPublisher{
+) *Instrumented {
+	return &Instrumented{
 		publisher: p,
 		logger:    tel.ScopedLogger("publisher"),
 		metrics:   tel.Metrics,
@@ -45,16 +45,16 @@ func NewInstrumentedPublisher(
 
 // Connect establishes the connection to the underlying message broker.
 // can initialize the connection through the instrumentation layer.
-func (ip *InstrumentedPublisher) Connect(ctx context.Context) error {
-	return ip.publisher.Connect(ctx)
+func (i *Instrumented) Connect(ctx context.Context) error {
+	return i.publisher.Connect(ctx)
 }
 
 // Publish wraps the underlying publisher's Publish method. It creates a new
 // trace span, records the start time for latency metrics, and captures any
 // errors. It ensures that delivery metrics include both the event type and
 // the final outcome (success/failure) for granular monitoring.
-func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event) error {
-	ctx, span := ip.tracer.Start(ctx, "Publisher.Publish",
+func (i *Instrumented) Publish(ctx context.Context, event relay.Event) error {
+	ctx, span := i.tracer.Start(ctx, "Publisher.Publish",
 		trace.WithAttributes(
 			attribute.String("event.id", event.ID.String()),
 			attribute.String("event.type", event.Type),
@@ -63,7 +63,7 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 	defer span.End()
 
 	start := time.Now()
-	err := ip.publisher.Publish(ctx, event)
+	err := i.publisher.Publish(ctx, event)
 
 	// Move metric recording here so we can include the outcome
 	status := "success"
@@ -74,7 +74,7 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 		span.SetStatus(codes.Error, err.Error())
 
 		if !errors.Is(err, context.Canceled) {
-			ip.logger.Warn("publish failed",
+			i.logger.Warn("publish failed",
 				zap.String("event_id", event.ID.String()),
 				zap.String("type", event.Type),
 				zap.Error(err),
@@ -85,21 +85,21 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 	}
 
 	// Record latency with BOTH type and status
-	ip.metrics.PublisherLatency.Record(ctx, time.Since(start).Seconds(),
+	i.metrics.PublisherLatency.Record(ctx, time.Since(start).Seconds(),
 		metric.WithAttributes(
 			attribute.String("status", status),
-			attribute.String("relay_id", ip.relayID),
+			attribute.String("relay_id", i.relayID),
 		))
 
 	return err
 }
 
 // Close closes the underlying publisher.
-func (ip *InstrumentedPublisher) Close(ctx context.Context) error {
-	return ip.publisher.Close(ctx)
+func (i *Instrumented) Close(ctx context.Context) error {
+	return i.publisher.Close(ctx)
 }
 
 // Ping verifies the connectivity of the underlying publisher to the message broker.
-func (ip *InstrumentedPublisher) Ping(ctx context.Context) error {
-	return ip.publisher.Ping(ctx)
+func (i *Instrumented) Ping(ctx context.Context) error {
+	return i.publisher.Ping(ctx)
 }
