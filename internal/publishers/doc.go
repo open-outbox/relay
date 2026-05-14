@@ -14,6 +14,6 @@
 // is determining if a publishing error is transient (retryable) or permanent,
 // which informs the relay engine's retry policies.
 //
-// This package also includes an `InstrumentedPublisher` which wraps any
+// This package also includes an `Instrumented` publisher which wraps any
 // `relay.Publisher` to add OpenTelemetry metrics and tracing automatically.
 package publishers
