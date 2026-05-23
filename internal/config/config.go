@@ -211,6 +211,64 @@ type Config struct {
 	//	strict "At-Least-Once" delivery guarantees.
 	KafkaRequiredAcks string `mapstructure:"KAFKA_REQUIRED_ACKS"`
 
+	// KafkaTLSCA can be a filesystem path to a Root CA certificate,
+	// a Base64 encoded string of the CA certificate, or the raw PEM data.
+	// Used to verify the Kafka broker's identity.
+
+	KafkaTLSCA string `mapstructure:"KAFKA_TLS_CA"`
+
+	// KafkaTLSCert can be a filesystem path to a client certificate,
+	// a Base64 encoded string of the certificate, or the raw PEM data.
+	// Required for mutual TLS (mTLS) authentication.
+	//	Default: ""
+	KafkaTLSCert string `mapstructure:"KAFKA_TLS_CERT"`
+
+	// KafkaTLSKey can be a filesystem path to a client private key,
+	// a Base64 encoded string of the key, or the raw PEM data.
+	// Required for mutual TLS (mTLS) authentication.
+	//	Default: ""
+	KafkaTLSKey string `mapstructure:"KAFKA_TLS_KEY"`
+
+	// KafkaTLSVersion specifies the minimum TLS version required for the connection.
+	// Supported values: "1.0", "1.1", "1.2", "1.3"
+	//	Default: "1.2"
+	KafkaTLSVersion string `env:"KAFKA_TLS_VERSION" envDefault:"1.2"`
+
+	// KafkaServerName specifies the expected Server Name Indication (SNI)
+	// or hostname on the broker certificate. If empty, the broker's
+	// connection address is used.
+	//	Default: ""
+	KafkaServerName string `mapstructure:"KAFKA_SERVER_NAME"`
+
+	// KafkaInsecure bypasses verification of the Kafka broker's TLS
+	// certificates. Warning: Enabling this allows potential Man-in-the-Middle
+	// attacks and should only be used in local development.
+	//  Default: false
+	KafkaInsecure bool `mapstructure:"KAFKA_INSECURE"`
+
+	// KafkaSASLMechanism specifies the authentication protocol to use
+	// if SASL is required (e.g., "plain", "scram-sha-256", "scram-sha-512").
+	// If empty, SASL authentication is disabled.
+	//	Default: ""
+	KafkaSASLMechanism string `mapstructure:"KAFKA_SASL_MECHANISM"`
+
+	// KafkaUsername is the SASL username used for authentication.
+	//	Default: ""
+	KafkaUsername string `mapstructure:"KAFKA_USERNAME"`
+
+	// KafkaPassword is the SASL password used for authentication.
+	//	Default: ""
+	KafkaPassword string `mapstructure:"KAFKA_PASSWORD"`
+
+	// KafkaIdleTimeout is the maximum amount of time an idle connection
+	// will remain open before being closed by the transport layer.
+	//  Default: 30s
+	KafkaIdleTimeout time.Duration `mapstructure:"KAFKA_IDLE_TIMEOUT"`
+
+	// KafkaKeepAlive specifies the keep-alive period for an active network connection.
+	//  Default: 30s
+	KafkaKeepAlive time.Duration `mapstructure:"KAFKA_KEEP_ALIVE"`
+
 	// RemoteConfigProvider determines the external source for configuration.
 	// Supported providers: "etcd3", "consul", or "firestore".
 	//  Default: ""
@@ -274,13 +332,16 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_BATCH_SIZE", 1)
 	v.SetDefault("KAFKA_BATCH_BYTES", 10485760) // 10MB default
 	v.SetDefault("KAFKA_BATCH_TIMEOUT", "10ms")
-	v.SetDefault("KAFKA_CONNECTION_TIMEOUT", "10ms")
+	v.SetDefault("KAFKA_CONNECTION_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
 	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_COMPRESSION", "snappy")
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
+	v.SetDefault("KAFKA_INSECURE", false)
+	v.SetDefault("KAFKA_IDLE_TIMEOUT", "30s")
+	v.SetDefault("KAFKA_KEEP_ALIVE", "30s")
 
 	//Remote config settings
 	v.SetDefault("REMOTE_CONFIG_TYPE", "yaml")

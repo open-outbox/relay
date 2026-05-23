@@ -33,6 +33,8 @@ Our roadmap is focused on three key pillars:
 
     Expanding the reach of the Relay to support common enterprise stacks.
 
+    * **Enterprise Kafka Security:** Native TLS, mutual TLS (mTLS), and SASL (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+    authentication support. *New*
     * **Table Sampling**: Implement SQL sampling to reduce lock contention and index pressure.
     * **Draining Strategy** : Configurable toggle between continuous draining and intervalled polling.
     * **MySQL Support:** Implement the `relay.Storage` interface for MySQL/MariaDB.
@@ -51,7 +53,7 @@ Our roadmap is focused on three key pillars:
     * **Distribution:** Automated binary releases for Linux, macOS, and Windows.
     * **Strict Ordering:** Enhanced support for strictly ordered delivery and partitioning.
     * **Orchestration:** Official **Helm Charts** and K8s manifests for production.
-    * **Security:** Native TLS/mTLS support across all storage and publisher drivers.
+    * **Security & Encryption:** Native TLS/mTLS support across remaining storage (Postgres/MySQL) and publisher drivers.
     * **Throughput Optimization:** Advanced tuning for high-frequency polling and publisher batching.
     * **Advanced Observability:** Pre-built Grafana dashboards for standard OTel metrics.
 

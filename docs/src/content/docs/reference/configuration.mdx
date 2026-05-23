@@ -309,6 +309,45 @@ These settings only apply when `PUBLISHER_TYPE="kafka"`.
 
 ---
 
+### `KAFKA_MAX_ATTEMPTS`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Integer" />
+
+**Default:** `5`
+
+The number of times the Kafka producer will attempt to resend a message if the initial write fails.
+
+---
+
+### `KAFKA_WRITE_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `10s`
+
+The maximum time to wait for a successful write acknowledgment from the Kafka broker.
+
+---
+
+### `KAFKA_READ_TIMEOUT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `10s`
+
+The maximum time to wait for a response when reading from the Kafka broker (e.g., during metadata updates).
+
+---
+
+### `KAFKA_CONNECTION_TIMEOUT`
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
+
+Default: 10s
+
+The maximum time allowed to establish the initial TCP connection and perform the metadata exchange with the Kafka brokers before the engine reports a connection failure.
+
+---
+
 ### `KAFKA_BATCH_SIZE`
 
 <Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="Integer"></Badge>
@@ -376,42 +415,113 @@ The number of acknowledgments the producer requires the leader to have received 
 
 ---
 
-### `KAFKA_MAX_ATTEMPTS`
+### `KAFKA_TLS_CA`
 
-<Badge variant="note" text="Optional" /> <Badge variant="default" text="Integer" />
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
 
-**Default:** `5`
+**Default:** `""`
 
-The number of times the Kafka producer will attempt to resend a message if the initial write fails.
+The Certificate Authority (CA) certificate used to verify the identity of the Kafka brokers. Can be an inline raw PEM text block, a file path prefixed with `file://`, or a Base64-encoded string prefixed with `base64://`.
 
 ---
 
-### `KAFKA_WRITE_TIMEOUT`
+### `KAFKA_TLS_CERT`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The client TLS certificate used for mutual authentication (mTLS). Must be provided alongside `KAFKA_TLS_KEY`. Can be an inline raw PEM text block, a file path prefixed with `file://`, or a Base64-encoded string prefixed with `base64://`.
+
+---
+
+### `KAFKA_TLS_KEY`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The client private key used for mutual authentication (mTLS). Must be provided alongside `KAFKA_TLS_CERT`. Can be an inline raw PEM text block, a file path prefixed with `file://`, or a Base64-encoded string prefixed with `base64://`.
+
+---
+
+### `KAFKA_TLS_VERSION`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `"1.2"`
+
+The minimum TLS version required for secure communication with the Kafka brokers. Supported values are `"1.0"`, `"1.1"`, `"1.2"`, and `"1.3"`.
+
+---
+
+### `KAFKA_SERVER_NAME`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The TLS Server Name Indication (SNI) used to verify the hostname on the broker's certificate. Useful if your connection endpoint routing differs from the certificate's Common Name (CN).
+
+---
+
+### `KAFKA_INSECURE`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Boolean" />
+
+**Default:** `false`
+
+Controls whether the client skips verifying the broker's certificate chain and hostname. Set to `true` only for local testing or controlled environments.
+
+---
+
+### `KAFKA_SASL_MECHANISM`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The SASL authentication mechanism used to connect to the brokers. Supported values are `"plain"`, `"scram-sha-256"`, and `"scram-sha-512"`. Leave empty for unauthenticated connections.
+
+---
+
+### `KAFKA_USERNAME`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The username credential used for SASL authentication. Required if `KAFKA_SASL_MECHANISM` is set.
+
+---
+
+### `KAFKA_PASSWORD`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The password credential used for SASL authentication. Required if `KAFKA_SASL_MECHANISM` is set.
+
+---
+
+### `KAFKA_IDLE_TIMEOUT`
 
 <Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
 
-**Default:** `10s`
+**Default:** `30s`
 
-The maximum time to wait for a successful write acknowledgment from the Kafka broker.
+The maximum amount of time an idle connection to a Kafka broker will remain open before the transport closes it. A value of zero keeps the idle connections active indefinitely.
 
 ---
 
-### `KAFKA_READ_TIMEOUT`
+### `KAFKA_KEEP_ALIVE`
 
 <Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
 
-**Default:** `10s`
+**Default:** `30s`
 
-The maximum time to wait for a response when reading from the Kafka broker (e.g., during metadata updates).
-
----
-
-### `KAFKA_CONNECTION_TIMEOUT`
-<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="Duration"></Badge>
-
-Default: 10s
-
-The maximum time allowed to establish the initial TCP connection and perform the metadata exchange with the Kafka brokers before the engine reports a connection failure.
+The keep-alive period for an active network connection to a Kafka broker. A value of zero uses the default operating system keep-alive interval.
 
 ---
 
