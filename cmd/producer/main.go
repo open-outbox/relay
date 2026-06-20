@@ -6,6 +6,7 @@ import (
 	"crypto/rand" // Using crypto/rand as requested
 	"fmt"
 	"log"
+	"math/big"
 	math_rand "math/rand/v2" // Using newer math/rand/v2 for the partition keys
 	"os"
 	"os/signal"
@@ -222,11 +223,18 @@ func sendBatch(
 	return pool.SendBatch(ctx, batch).Close()
 }
 
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
 func generateStaticPayload(size int) []byte {
 	b := make([]byte, size)
-	_, err := rand.Read(b)
-	if err != nil {
-		log.Fatalf("failed to generate random payload: %v", err)
+	madIndex := big.NewInt(int64(len(charset)))
+
+	for i := 0; i < size; i++ {
+		idx, err := rand.Int(rand.Reader, madIndex)
+		if err != nil {
+			log.Fatalf("failed to generate secure random index: %v", err)
+		}
+		b[i] = charset[idx.Int64()]
 	}
 	return b
 }

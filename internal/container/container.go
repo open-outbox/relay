@@ -5,6 +5,7 @@ package container
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -175,6 +176,15 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 // (strings) to Kafka-specific types like compression algorithms and required acknowledgment
 // levels. This separation keeps the main container logic clean.
 func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
+
+	brokerList := strings.Split(strings.TrimPrefix(cfg.PublisherURL, "kafka://"), ",")
+
+	if len(brokerList) < 1 || (len(brokerList) == 1 && brokerList[0] == "") {
+		return nil, fmt.Errorf(
+			"failed to create publisher: no broker addresses provided for kafka publisher",
+		)
+	}
+
 	// Compression Mapping
 	compressionMap := map[string]kafka.Compression{
 		"gzip":   compress.Gzip,
@@ -187,14 +197,6 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 	comp, ok := compressionMap[strings.ToLower(cfg.KafkaCompression)]
 	if !ok {
 		return nil, fmt.Errorf("unsupported Kafka Compression type: %s", cfg.KafkaCompression)
-	}
-
-	brokerList := strings.Split(strings.TrimPrefix(cfg.PublisherURL, "kafka://"), ",")
-
-	if len(brokerList) < 1 || (len(brokerList) == 1 && brokerList[0] == "") {
-		return nil, fmt.Errorf(
-			"failed to create publisher: no broker addresses provided for kafka publisher",
-		)
 	}
 
 	// Required Acks Mapping
@@ -214,6 +216,31 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaRequiredAcks)
 	}
 
+	mechanism := strings.ToLower(strings.TrimSpace(cfg.KafkaSASLMechanism))
+	if mechanism != "" {
+		switch mechanism {
+		case "plain", "scram-sha-256", "scram-sha-512":
+		default:
+			return nil, fmt.Errorf(
+				"unsupported Kafka SASL Mechanism type: %s",
+				cfg.KafkaSASLMechanism,
+			)
+		}
+	}
+
+	var tlsVersionMap = map[string]uint16{
+		"1.0": tls.VersionTLS10,
+		"1.1": tls.VersionTLS11,
+		"1.2": tls.VersionTLS12,
+		"1.3": tls.VersionTLS13,
+	}
+
+	tlsVersion := tls.VersionTLS12
+
+	if version, exists := tlsVersionMap[cfg.KafkaTLSVersion]; exists {
+		tlsVersion = int(version)
+	}
+
 	kCfg := publishers.KafkaConfig{
 		Brokers:           brokerList,
 		MaxAttempts:       cfg.KafkaMaxAttempts,
@@ -224,8 +251,19 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		BatchBytes:        cfg.KafkaBatchBytes,
 		BatchTimeout:      cfg.KafkaBatchTimeout,
 		Async:             cfg.KafkaAsync,
-		RequiredAcks:      acks,
 		Compression:       comp,
+		RequiredAcks:      acks,
+		TLSCA:             cfg.KafkaTLSCA,
+		TLSCert:           cfg.KafkaTLSCert,
+		TLSKey:            cfg.KafkaTLSKey,
+		TLSVersion:        uint16(tlsVersion),
+		ServerName:        cfg.KafkaServerName,
+		Insecure:          cfg.KafkaInsecure,
+		SASLMechanism:     cfg.KafkaSASLMechanism,
+		Username:          cfg.KafkaUsername,
+		Password:          cfg.KafkaPassword,
+		IdleTimeout:       cfg.KafkaIdleTimeout,
+		KeepAlive:         cfg.KafkaKeepAlive,
 	}
 	return publishers.NewKafka(kCfg)
 }

@@ -2,13 +2,19 @@ package publishers
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
+	"github.com/open-outbox/relay/internal/utils"
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl"
+	"github.com/segmentio/kafka-go/sasl/plain"
+	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
 // KafkaConfig holds the configuration for the Kafka publisher.
@@ -30,13 +36,26 @@ type KafkaConfig struct {
 	Async             bool
 	Compression       kafka.Compression
 	RequiredAcks      kafka.RequiredAcks
+	TLSCA             string
+	TLSCert           string
+	TLSKey            string
+	TLSVersion        uint16
+	ServerName        string
+	Insecure          bool
+	SASLMechanism     string
+	Username          string
+	Password          string
+	IdleTimeout       time.Duration
+	KeepAlive         time.Duration
 }
 
 // Kafka is a publisher that writes messages to an Apache Kafka cluster.
 // It implements the relay.Publisher interface.
 type Kafka struct {
-	writer *kafka.Writer
-	cfg    KafkaConfig
+	writer    *kafka.Writer
+	cfg       KafkaConfig
+	dialer    *kafka.Dialer
+	transport *kafka.Transport
 }
 
 // NewKafka initializes a new Kafka writer with strict ordering and safety.
@@ -51,45 +70,40 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 			"kafka connection failed: no broker addresses provided in configuration",
 		)
 	}
-	return &Kafka{
-		cfg: cfg,
-	}, nil
+
+	k := &Kafka{cfg: cfg}
+
+	dialer, transport, err := k.buildTransport()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile transport configuration: %w", err)
+	}
+	k.dialer = dialer
+	k.transport = transport
+
+	k.writer = &kafka.Writer{
+		Addr:         kafka.TCP(k.cfg.Brokers...),
+		Balancer:     &kafka.Hash{},
+		RequiredAcks: cfg.RequiredAcks,
+		Async:        cfg.Async,
+		MaxAttempts:  cfg.MaxAttempts,
+		WriteTimeout: cfg.WriteTimeout,
+		ReadTimeout:  cfg.ReadTimeout,
+		BatchSize:    cfg.BatchSize,
+		BatchBytes:   cfg.BatchBytes,
+		Transport:    k.transport,
+	}
+
+	return k, nil
 
 }
 
 // Connect satisfies the relay.Publisher interface.
 // It initializes the Kafka writer using the stored configuration.
 func (k *Kafka) Connect(ctx context.Context) error {
-
-	if k.writer != nil {
-		return nil
-	}
-
-	// Perform a quick Dial check to ensure brokers are reachable
-	// before committing to the writer lifecycle.
 	if err := k.Ping(ctx); err != nil {
-		return fmt.Errorf("initial kafka connection check failed: %w, %v", err, k.cfg.Brokers)
+		return fmt.Errorf("failed to establish broker connectivity: %w", err)
 	}
-
-	k.writer = &kafka.Writer{
-		Addr:         kafka.TCP(k.cfg.Brokers...),
-		Balancer:     &kafka.Hash{},
-		RequiredAcks: k.cfg.RequiredAcks,
-		Async:        k.cfg.Async,
-
-		MaxAttempts:  k.cfg.MaxAttempts,
-		WriteTimeout: k.cfg.WriteTimeout,
-		ReadTimeout:  k.cfg.ReadTimeout,
-
-		// Critical Performance Overrides
-		BatchSize:    k.cfg.BatchSize,
-		BatchBytes:   k.cfg.BatchBytes,
-		BatchTimeout: k.cfg.BatchTimeout,
-		Compression:  k.cfg.Compression,
-	}
-
 	return nil
-
 }
 
 // Publish sends a single event to Kafka.
@@ -144,10 +158,42 @@ func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 	return nil
 }
 
-// mapToKafkaMessage transforms a generic relay.Event into a kafka.Message.
-// It handles JSON unmarshaling of headers, sets the message key from the
-// PartitionKey, and injects the X-Event-ID header to allow for
-// downstream deduplication.
+// Close gracefully shuts down the Kafka publisher.
+// It blocks until all buffered messages are flushed or the context expires.
+func (k *Kafka) Close(_ context.Context) error {
+	if k == nil || k.writer == nil {
+		return nil // Safe to close if never connected
+	}
+
+	// k.writer.Close() returns an error if the flush fails or if
+	// the underlying connections cannot be closed cleanly.
+	if err := k.writer.Close(); err != nil {
+		return fmt.Errorf("failed to close kafka writer: %w", err)
+	}
+
+	return nil
+}
+
+// Ping verifies the connectivity to the Kafka brokers by attempting to
+// fetch metadata or checking the underlying connection state.
+func (k *Kafka) Ping(ctx context.Context) error {
+
+	var addr string
+	if k.writer != nil {
+		addr = k.writer.Addr.String()
+	} else {
+		addr = k.cfg.Brokers[0]
+	}
+
+	conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to dial kafka broker at %s: %w", addr, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	return nil
+}
+
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	var kafkaKey []byte
 
@@ -186,49 +232,6 @@ func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	}, nil
 }
 
-// Close gracefully shuts down the Kafka publisher.
-// It blocks until all buffered messages are flushed or the context expires.
-func (k *Kafka) Close(_ context.Context) error {
-	if k == nil || k.writer == nil {
-		return nil // Safe to close if never connected
-	}
-
-	// k.writer.Close() returns an error if the flush fails or if
-	// the underlying connections cannot be closed cleanly.
-	if err := k.writer.Close(); err != nil {
-		return fmt.Errorf("failed to close kafka writer: %w", err)
-	}
-
-	return nil
-}
-
-// Ping verifies the connectivity to the Kafka brokers by attempting to
-// fetch metadata or checking the underlying connection state.
-func (k *Kafka) Ping(ctx context.Context) error {
-	var addr string
-	if k.writer != nil {
-		addr = k.writer.Addr.String()
-	} else {
-		addr = k.cfg.Brokers[0]
-	}
-
-	dialer := &kafka.Dialer{
-		Timeout:   k.cfg.ConnectionTimeout,
-		DualStack: true,
-	}
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to dial kafka broker at %s: %w", addr, err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	return nil
-}
-
-// isKafkaErrorRetryable classifies Kafka-specific errors to determine
-// if the relay should attempt to republish the message.
-// It considers network timeouts, connection issues, and temporary
-// broker-side states as retryable.
 func isKafkaErrorRetryable(err error) bool {
 	if err == nil {
 		return true
@@ -270,4 +273,103 @@ func isIndividualKafkaErrorRetryable(err error) bool {
 	default:
 		return true
 	}
+}
+
+func (k *Kafka) getSASLMechanism() (sasl.Mechanism, error) {
+	switch k.cfg.SASLMechanism {
+	case "plain":
+		return plain.Mechanism{
+			Username: k.cfg.Username,
+			Password: k.cfg.Password,
+		}, nil
+
+	case "scram-sha-256":
+		mechanism, err := scram.Mechanism(scram.SHA256, k.cfg.Username, k.cfg.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SCRAM-SHA-256 mechanism: %w", err)
+		}
+		return mechanism, nil
+
+	case "scram-sha-512":
+		mechanism, err := scram.Mechanism(scram.SHA512, k.cfg.Username, k.cfg.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SCRAM-SHA-512 mechanism: %w", err)
+		}
+		return mechanism, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported SASL mechanism for Kafka: %s", k.cfg.SASLMechanism)
+	}
+}
+
+func (k *Kafka) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
+
+	ca, err := utils.LoadBytes(k.cfg.TLSCA)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load TLS CA: %w", err)
+	}
+	cert, err := utils.LoadBytes(k.cfg.TLSCert)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load TLS Cert: %w", err)
+	}
+	key, err := utils.LoadBytes(k.cfg.TLSKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load TLS Key: %w", err)
+	}
+
+	var tlsConfig *tls.Config
+	if ca != nil || cert != nil || key != nil || k.cfg.Insecure {
+		tlsConfig = &tls.Config{
+			ServerName:         k.cfg.ServerName,
+			InsecureSkipVerify: k.cfg.Insecure,
+			MinVersion:         k.cfg.TLSVersion,
+		}
+
+		if ca != nil {
+			cp := x509.NewCertPool()
+			if !cp.AppendCertsFromPEM(ca) {
+				return nil, nil, fmt.Errorf(
+					"failed to append CA certificate to pool: invalid or malformed X509 PEM data",
+				)
+			}
+			tlsConfig.RootCAs = cp
+		}
+
+		if cert != nil || key != nil {
+			if cert == nil || key == nil {
+				return nil, nil, fmt.Errorf(
+					"incomplete mTLS configuration: both TLSCert and TLSKey must be provided together",
+				)
+			}
+
+			pair, err := tls.X509KeyPair(cert, key)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to parse mTLS keypair: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{pair}
+		}
+	}
+
+	dialer := &kafka.Dialer{
+		Timeout:   k.cfg.ConnectionTimeout,
+		DualStack: true,
+		TLS:       tlsConfig,
+		KeepAlive: k.cfg.KeepAlive,
+	}
+
+	if k.cfg.SASLMechanism != "" {
+		mechanism, err := k.getSASLMechanism()
+		if err != nil {
+			return nil, nil, err
+		}
+		dialer.SASLMechanism = mechanism
+	}
+
+	transport := &kafka.Transport{
+		Dial:        dialer.DialFunc,
+		TLS:         tlsConfig,
+		IdleTimeout: k.cfg.IdleTimeout,
+	}
+
+	return dialer, transport, nil
 }

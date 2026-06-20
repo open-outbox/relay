@@ -12,6 +12,7 @@ The Open Outbox Relay is evolving from a robust core into a high-performance, un
 
 ## Phase 2: The Multi-Engine Ecosystem (In Progress)
 
+* **Enterprise Kafka Security:** Native TLS, mutual TLS (mTLS), and SASL (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512) authentication support. *New*
 * **TABLESAMPLE Polling Strategy**: Implement SQL sampling to reduce lock contention and index pressure in high-concurrency clusters.
 * **Draining Strategy** : Provide config to choose from draining mode (continuous processing) or intervalled polling.
 * **MySQL Support:** Implement the `relay.Storage` interface for MySQL/MariaDB.
@@ -27,7 +28,7 @@ The Open Outbox Relay is evolving from a robust core into a high-performance, un
 * **Distribution:** Automated binary releases for Linux, macOS, and Windows via GitHub Actions.
 * **Orchestration:** Official **Helm Charts** and K8s manifests for production-grade deployments.
 * **Strict Ordering:** Enhanced support for strictly ordered message delivery and partitioned relaying.
-* **Security & Encryption:** Native TLS/mTLS support across all storage and publisher drivers.
+* **Security & Encryption:** Native TLS/mTLS support across remaining storage (Postgres/MySQL) and publisher drivers.
 * **Throughput Optimization:** Advanced tuning for high-frequency polling and publisher batching.
 * **Advanced Observability:** Pre-built Grafana dashboards for standard OTel metrics.
 

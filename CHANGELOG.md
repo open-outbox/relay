@@ -7,27 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### ✨ Added
 
+- **Kafka Enterprise Security:** Full support for TLS, mutual TLS (mTLS), and SASL authentication mechanisms (`PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`).
+- **Flexible Security Ingestion:** Added capability to parse certificates and keys from files (`file://`), Base64 strings (`base64://`), or raw inline PEM blocks.
+- **Configurable TLS Enforcements:** Exposed configuration options for minimum TLS versions (1.0 to 1.3) and Server Name Indication (SNI).
 - **Remote Configuration:** Support for fetching configuration from `Consul` and `etcd3`.
 - **Observability Middleware:** Introduced `Instrumented` storage to decouple telemetry from database logic and engine.
 - **New Metrics:** Added `openoutbox_events_reaped` counter to track event recovery activity.
 - **Enhanced Dashboards:** Added Grafana panels for Reaping Rates and specific storage operations (latency/throughput).
 - **OTel Infrastructure:** Upgraded OpenTelemetry Collector configuration to use current (non-deprecated) schema.
 
-### Changed
+### ⚙️ Changed
 
 - **Storage Interface**: `MarkDeliveredBatch` and `MarkFailedBatch` now return the number of affected rows (`int64`).
 - **Observability**: Moved lease expiration warnings from the database drivers to the `InstrumentedStorage` layer for better separation of concerns.
 - **Clean Architecture:** Removed `relay_id` from the global Storage interface, delegating identity handling to specific implementations.
 
-### Fixed
-
-- Improved telemetry accuracy by ensuring lease expiration is tracked within the instrumentation decorator
-rather than the core storage implementation.
-
 ### 🛡️ Fixed
 
-- **Integration Test Conflicts:** Resolved an issue where local environment variables
-were unintentionally overriding remote configuration providers during testing.
+- **Telemetry Accuracy:** Ensured lease expiration is tracked within the instrumentation decorator rather than the core storage implementation.
+- **Integration Test Conflicts:** Resolved an issue where local environment variables were unintentionally overriding remote configuration providers during testing.
 - **Engine Initialization:** Resolved a bug where the `EnableStats` flag was uninitialized in the engine container.
 
 ## [1.0.0] - 2026-05-04

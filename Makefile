@@ -14,7 +14,7 @@ COMPOSE_FILE        := deployments/infra-docker-compose.yaml
 MAIN_PACKAGE        := ./cmd/relay/main.go
 CLI_PACKAGE         := ./cmd/cli
 PRODUCER_PKG        := ./cmd/producer/main.go
-KAFKA_URL           := kafka:9092
+KAFKA_URL           := localhost:9094
 NATS_URL            := nats:4222
 OTEL_ENDPOINT       := localhost:4317
 
@@ -65,6 +65,9 @@ gen-api: ## Generates the api reference docs into /docs.
   		--output 'docs/src/content/docs/reference/api/{{.ImportPath}}.md' \
   		./...
 	find docs/src/content/docs/reference/api -name "*.md" -exec sh -c 'mv "$$1" "$${1%.md}.mdx"' _ {} \;
+
+gen-tls: ## Generates self-signed TLS files for local testing
+	./scripts/gen-tls.sh
 
 # ==========================================
 # Quality & Linting

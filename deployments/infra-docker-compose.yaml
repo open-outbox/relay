@@ -48,6 +48,8 @@ services:
     image: apache/kafka:3.7.0
     ports:
       - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     environment:
       - KAFKA_NODE_ID=1
       - KAFKA_PROCESS_ROLES=broker,controller
@@ -61,8 +63,6 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-    volumes:
-      - kafka_data:/bitnami/kafka
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

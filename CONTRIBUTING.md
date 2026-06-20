@@ -284,6 +284,7 @@ These commands help with local development and testing.
 | `make docker-build` | Builds the production-ready OCI container image. |
 | `make gen-api` | Generates the API documentation in the docs directory, to be tested by `make docs-dev`. |
 | `make docs-dev` | Runs the documentation in develoopment mode. Should run after `make gen-api`. |
+| `make gen-tls` | Generates certificates in `./.certs` for local `TLS (mTLS)`. |
 
 ### Tooling Setup
 
