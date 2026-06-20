@@ -77,7 +77,6 @@ services:
 
   jaeger:
     image: jaegertracing/all-in-one:latest
-    container_name: jaeger
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
@@ -85,7 +84,6 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.1.0
-    container_name: prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--web.enable-otlp-receiver' # To enable OTel ingestion
@@ -97,7 +95,6 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector:0.149.0
-    container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ../configs/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
@@ -110,7 +107,6 @@ services:
     volumes:
       - ../configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ../configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-    container_name: grafana
     ports:
       - "3000:3000"
     environment:
