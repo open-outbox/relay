@@ -51,7 +51,7 @@ services:
           --defaults
 
   relay:
-    image: openoutbox/relay:v4
+    image: openoutbox/relay
     depends_on:
       nats:
         condition: service_healthy
@@ -66,7 +66,7 @@ services:
       OTEL_METRICS_EXPORTER: none
 
   cli:
-    image: openoutbox/relay:v2
+    image: openoutbox/relay
     entrypoint: ["/app/cli"]
     environment:
       - STORAGE_TYPE=postgres
