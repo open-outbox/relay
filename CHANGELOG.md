@@ -21,6 +21,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - **Storage Interface**: `MarkDeliveredBatch` and `MarkFailedBatch` now return the number of affected rows (`int64`).
 - **Observability**: Moved lease expiration warnings from the database drivers to the `InstrumentedStorage` layer for better separation of concerns.
 - **Clean Architecture:** Removed `relay_id` from the global Storage interface, delegating identity handling to specific implementations.
+- **Documentation Update:** Rewrote the project `Quick Start` guide, adding support for telemetry, observability and
+continuous load generation.
 
 ### 🛡️ Fixed
 

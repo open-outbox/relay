@@ -58,17 +58,80 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      STORAGE_TYPE: "postgres"
-      STORAGE_URL: "postgres://postgres:postgres@postgres:5432/postgres"
-      PUBLISHER_TYPE: "nats"
-      PUBLISHER_URL: "nats://nats:4222"
-      OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: none
+      - STORAGE_TYPE=postgres
+      - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres
+      - PUBLISHER_TYPE=nats
+      - PUBLISHER_URL=nats://nats:4222
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_METRIC_EXPORT_INTERVAL=1000
 
   cli:
     image: openoutbox/relay
     entrypoint: ["/app/cli"]
     environment:
       - STORAGE_TYPE=postgres
-      - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+      - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres
     profiles: ["tools"]
+
+  producer:
+    build:
+      context: ../..
+      dockerfile: ./deployments/Dockerfile.producer
+    image: openoutbox/producer:local
+    profiles: ["load"]
+    depends_on:
+      - postgres
+    environment:
+      - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres
+    command: ["bench"]
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    profiles:
+      - telemetry
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - 16686:16686
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles:
+      - telemetry
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--web.enable-otlp-receiver'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../../configs/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.149.0
+    profiles:
+      - telemetry
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ../../configs/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - 8889:8889 # Prometheus exporter metrics
+      - 4317:4317 # OTLP gRPC receiver
+      - 4318:4318 # OTLP http receiver
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles:
+      - telemetry
+    volumes:
+      - ../../configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../../configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin

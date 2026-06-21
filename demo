@@ -1,0 +1,3 @@
+docker compose --profile demo-load stop load-generator
+docker-compose --profile demo-load up -d
+check the load: docker-compose logs -f relay

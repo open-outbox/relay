@@ -45,7 +45,7 @@ func init() {
 			&dbURL,
 			"storage-url",
 			os.Getenv("STORAGE_URL"),
-			"Database URL (Default: STORAGE_URL)",
+			"Database URL",
 		)
 	rootCmd.PersistentFlags().
 		StringVar(
@@ -82,7 +82,7 @@ func init() {
 			&seedCount,
 			"count",
 			getEnvInt("LOCAL_PRODUCER_SEED_COUNT", 100000),
-			"Total events to produce for seed command",
+			"Total events to produce. Affects only the seed command",
 		)
 	rootCmd.PersistentFlags().
 		IntVar(
