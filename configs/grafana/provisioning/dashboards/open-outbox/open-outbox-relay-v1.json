@@ -3,8 +3,8 @@
   "kind": "Dashboard",
   "metadata": {
     "name": "gvzjgp",
-    "generation": 1,
-    "creationTimestamp": "2026-05-08T11:24:30Z",
+    "generation": 2,
+    "creationTimestamp": "2026-06-22T22:41:29Z",
     "labels": {},
     "annotations": {}
   },
@@ -73,7 +73,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -223,7 +223,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -347,7 +347,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "heatmap",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -427,7 +427,7 @@
                       "version": "v0",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(\n  sum(rate(openoutbox_events_e2e_latency_seconds_bucket{le=\"$latency_target\"}[$__rate_interval])) \n  / \n  (sum(rate(openoutbox_publisher_latency_seconds_count[$__rate_interval])) > 0)\n) * 100 or vector(100)",
+                        "expr": "(\n  sum(rate(openoutbox_events_e2e_latency_seconds_bucket{le=\"$latency_target\"}[$__rate_interval])) \n  / \n  (sum(rate(openoutbox_events_e2e_latency_seconds_count[$__rate_interval])) > 0)\n) * 100 or vector(100)",
                         "legendFormat": "__auto",
                         "range": true
                       }
@@ -444,7 +444,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -546,7 +546,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "colorMode": "value",
@@ -676,7 +676,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -836,7 +836,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "heatmap",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1042,7 +1042,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1166,7 +1166,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1302,7 +1302,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "heatmap",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1421,7 +1421,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "state-timeline",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "alignValue": "center",
@@ -1544,7 +1544,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1668,7 +1668,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -1772,7 +1772,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -1900,7 +1900,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "annotations": {
@@ -2048,7 +2048,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "bargauge",
-            "version": "13.0.1",
+            "version": "13.0.2",
             "spec": {
               "options": {
                 "displayMode": "gradient",
@@ -2505,7 +2505,7 @@
         "kind": "CustomVariable",
         "spec": {
           "name": "latency_target",
-          "query": "0.01, 0.05, 0.1, 0.25, 0.5, 1, 5, 10, 25, 50, 80 ",
+          "query": "0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30",
           "current": {
             "text": "10",
             "value": "10"

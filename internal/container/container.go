@@ -135,6 +135,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 
 			params := relay.EngineParams{
 				RelayID:                       cfg.RelayID,
+				EngineMode:                    relay.EngineMode(cfg.EngineMode),
 				Interval:                      cfg.PollInterval,
 				BatchSize:                     cfg.BatchSize,
 				LeaseTimeout:                  cfg.LeaseTimeout,
@@ -142,6 +143,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				PublisherConnectRetryInterval: cfg.PublisherConnectRetryInterval,
 				HealthCheckInterval:           cfg.HealthCheckInterval,
 				EnableStats:                   cfg.EnableStats,
+				EnableReaper:                  cfg.EnableReaper,
 				RetryPolicy:                   retruPolicy,
 			}
 

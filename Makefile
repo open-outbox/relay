@@ -14,7 +14,7 @@ COMPOSE_FILE        := deployments/infra-docker-compose.yaml
 MAIN_PACKAGE        := ./cmd/relay/main.go
 CLI_PACKAGE         := ./cmd/cli
 PRODUCER_PKG        := ./cmd/producer/main.go
-KAFKA_URL           := localhost:9094
+KAFKA_URL           := localhost:9092
 NATS_URL            := nats:4222
 OTEL_ENDPOINT       := localhost:4317
 

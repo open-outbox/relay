@@ -109,11 +109,28 @@ When moving to production, default settings should be reviewed for reliability a
 
 | Variable | Recommendation | Purpose |
 | :--- | :--- | :--- |
-| `ENVIRONMENT` | `production` | Enables structured JSON logging and production-level telemetry. |
+| `ENVIRONMENT` | `production` | Enables structured JSON logging. |
 | `BATCH_SIZE` | `500` - `2000` | Tune this based on your database IOPS and network throughput. |
 | `POLL_INTERVAL` | `100ms` | The "sleep" duration when no events are found. Controls the trade-off between database idle load and "near real-time" latency. |
 
 See the [configuration reference](/reference/configuration) for more details.
+
+## 4. Operational Scaling (`EngineMode`)
+
+Use the `ENGINE_MODE` variable to define the responsibility of each instance.
+This prevents resource contention and ensures reliable processing.
+
+| Mode | Behavior | Best For |
+| :--- | :--- | :--- |
+| `default` | Runs the full engine, including statistics and lease reaping if `ENABLE_STATS` and `ENABLE_REAPER` are enabled. | Standard, single-node, or small-scale deployments. |
+| `worker` | Focuses strictly on high-throughput event processing. Disables stats and reaper | Scaling event ingestion in a multi-instance cluster. |
+| `maintenance` | Runs only background cleanup tasks (reaper) and stats, and disables publishing. | Dedicated management nodes to offload overhead. |
+
+<Aside type="tip">
+  In high-volume clusters, use a 1:N ratio: deploy multiple `worker` nodes for throughput,
+  and a single `maintenance` node to manage database cleanup and observability.
+</Aside>
+
 
 ### Observability
 We strongly recommend enabling **OpenTelemetry** to monitor your delivery health.

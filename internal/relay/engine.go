@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync/atomic"
 	"time"
 
@@ -24,6 +25,42 @@ const (
 	defaultHealthCheckInterval           = 5 * time.Second
 	defaultPublisherConnectRetryInterval = 5 * time.Second
 )
+
+// EngineMode dictates the runtime profile of this Relay instance.
+//
+// By default, a single instance executes all core, maintenance, and metrics routines
+// concurrently. For high-scale or performance-critical production topologies, instances
+// can be specialized into dedicated roles to protect the primary database from
+// analytical query thrashing or lock contention.
+type EngineMode string
+
+const (
+	// EngineModeDefault runs the full suite of background routines concurrently.
+	// This includes the core polling engine, the lease reaper,
+	// and the heavy database telemetry/analytical statistics loops.
+	// Recommended for local development and standard workloads.
+	EngineModeDefault EngineMode = "default"
+
+	// EngineModeWorker focuses strictly on high-throughput event processing.
+	// It only runs the core engine loops (polling and publishing)
+	EngineModeWorker EngineMode = "worker"
+
+	// EngineModeMaintenance isolates heavy, non-critical database operations.
+	// It completely disables core event publishing, operating purely as a single-replica
+	// service dedicated to executing periodic lease reaping and heavy background analytical
+	// queries for system observability dashboards.
+	EngineModeMaintenance EngineMode = "maintenance"
+)
+
+// IsValid checks if the mode is a supported engine state
+func (m EngineMode) IsValid() bool {
+	switch m {
+	case EngineModeDefault, EngineModeWorker, EngineModeMaintenance:
+		return true
+	default:
+		return false
+	}
+}
 
 // State represents the current operational state of the engine.
 // It is reported via the StateGauge to provide observability into
@@ -50,6 +87,7 @@ var ErrPublisherPaused = errors.New("publisher is paused")
 // and retry policies.
 type Engine struct {
 	relayID                       string
+	engineMode                    EngineMode
 	storage                       Storage
 	publisher                     Publisher
 	interval                      time.Duration
@@ -68,6 +106,7 @@ type Engine struct {
 	healthCheckInterval           time.Duration
 	lastStatus                    State
 	enableStats                   bool
+	enableReaper                  bool
 }
 
 // EngineParams handles the tuning and identity.
@@ -75,6 +114,7 @@ type Engine struct {
 // and configure the relay engine's behavior.
 type EngineParams struct {
 	RelayID                       string
+	EngineMode                    EngineMode
 	Interval                      time.Duration
 	BatchSize                     int
 	LeaseTimeout                  time.Duration
@@ -84,6 +124,7 @@ type EngineParams struct {
 	RetryPolicy                   RetryPolicy
 	EnableBatchPublish            bool
 	EnableStats                   bool
+	EnableReaper                  bool
 }
 
 // NewEngine initializes and returns a new Engine instance.
@@ -121,8 +162,23 @@ func NewEngine(
 		params.ReapBatchSize = params.BatchSize
 	}
 
+	mode := EngineMode(params.EngineMode)
+	if params.EngineMode == "" {
+		mode = EngineModeDefault
+	} else if !mode.IsValid() {
+		return nil, fmt.Errorf("invalid ENGINE_MODE %q: supported modes are %s, %s, or %s",
+			params.EngineMode,
+			EngineModeDefault,
+			EngineModeWorker,
+			EngineModeMaintenance,
+		)
+	}
+
+	params.EngineMode = mode
+
 	return &Engine{
 		relayID:                       params.RelayID,
+		engineMode:                    params.EngineMode,
 		storage:                       storage,
 		publisher:                     publisher,
 		interval:                      params.Interval,
@@ -139,6 +195,7 @@ func NewEngine(
 		events:                        make([]Event, params.BatchSize),
 		healthCheckInterval:           params.HealthCheckInterval,
 		enableStats:                   params.EnableStats,
+		enableReaper:                  params.EnableReaper,
 	}, nil
 }
 
@@ -150,76 +207,123 @@ func NewEngine(
 // It blocks until the context is cancelled or a critical error occurs.
 func (e *Engine) Start(ctx context.Context) error {
 
-	if err := e.connectToPublisher(ctx); err != nil {
-		return err
-	}
-	e.lastStatus = StateActive
-
 	g, gCtx := errgroup.WithContext(ctx)
 
-	g.Go(func() error {
-		return e.monitorHealth(gCtx)
-	})
+	var runEngine, runStats, runReaper bool
 
-	if e.enableStats {
-		g.Go(func() error {
-			return e.watchBacklog(gCtx)
-		})
+	switch e.engineMode {
+	case EngineModeDefault:
+		e.logger.Info("starting engine in DEFAULT mode")
+		runEngine = true
+		runStats = e.enableStats
+		runReaper = e.enableReaper
+
+	case EngineModeMaintenance:
+		e.logger.Info("starting engine in MAINTENANCE mode")
+		runEngine = false
+		runStats = e.enableStats
+		runReaper = e.enableReaper
+
+	case EngineModeWorker:
+		e.logger.Info("starting engine in WORKER mode")
+		runEngine = true
+		runStats = false
+		runReaper = false
+
+	default:
+		return fmt.Errorf("unknown or unsupported engine mode: %q", e.engineMode)
 	}
 
-	g.Go(func() error {
-		return e.reapExpiredLeases(gCtx)
-	})
+	if runEngine {
+		if err := e.connectToPublisher(ctx); err != nil {
+			return err
+		}
+		e.lastStatus = StateActive
 
-	g.Go(func() error {
-		for {
-			select {
-			case <-gCtx.Done():
-				return gCtx.Err()
-			default:
-				count, err := e.process(gCtx)
+		g.Go(func() error {
+			return e.monitorHealth(gCtx)
+		})
+		g.Go(func() error { return e.runProcessingLoop(gCtx) })
+	}
+	if runStats {
+		e.logger.Info("stats monitor enabled")
+		g.Go(func() error { return e.watchBacklog(gCtx) })
+	}
+	if runReaper {
+		e.logger.Info("lease reaper enabled")
+		g.Go(func() error { return e.reapExpiredLeases(gCtx) })
+	}
 
-				var currentStatus State
-				waitInterval := e.interval
+	e.logger.Info("engine started successfully", zap.String("relay_id", e.relayID))
+	return g.Wait()
+}
 
-				if err != nil {
-					if errors.Is(err, ErrPublisherPaused) {
-						currentStatus = StatePaused
-						waitInterval = e.healthCheckInterval
-					} else {
-						currentStatus = StateError
-						waitInterval = e.interval
-						utils.LogIfError(e.logger, err, "Batch processing failed")
-					}
-				} else {
-					currentStatus = StateActive
-				}
+func (e *Engine) runProcessingLoop(ctx context.Context) error {
+	e.logger.Info("starting processing loop", zap.String("relay_id", e.relayID))
 
-				if currentStatus != e.lastStatus {
-					e.metrics.RelayStateGauge.Record(gCtx, int64(currentStatus),
-						metric.WithAttributes(attribute.String("relay_id", e.relayID)),
-					)
-					e.lastStatus = currentStatus
-				}
+	// Initiall jitter to prevent thundering herd in startup
+	initJitter := time.Duration(rand.IntN(50)) * time.Millisecond
+	if initJitter > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(initJitter):
+		}
+	}
 
-				// If the batch was empty, wait for the next interval
-				if err != nil || count == 0 {
-					select {
-					case <-gCtx.Done():
-						return gCtx.Err()
-					case <-time.After(waitInterval):
-						continue
-					}
-				}
-				// continue the loop immediately to "drain" the queue.
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
+
+	var waitInterval time.Duration
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		count, err := e.process(ctx)
+
+		var currentStatus State
+		if err != nil {
+			if errors.Is(err, ErrPublisherPaused) {
+				currentStatus = StatePaused
+				waitInterval = e.healthCheckInterval
+			} else {
+				currentStatus = StateError
+				waitInterval = e.interval
+				utils.LogIfError(e.logger, err, "Batch processing failed")
+			}
+		} else {
+			currentStatus = StateActive
+			if count > 0 {
+				waitInterval = 0
+			} else {
+				// jitter to prevent thundering herd on sudden event bursts
+				jitter := time.Duration(rand.IntN(50)) * time.Millisecond
+				waitInterval = e.interval + jitter
 			}
 		}
-	})
 
-	e.logger.Info("Engine started", zap.String("relay_id", e.relayID))
+		if currentStatus != e.lastStatus {
+			e.metrics.RelayStateGauge.Record(ctx, int64(currentStatus),
+				metric.WithAttributes(attribute.String("relay_id", e.relayID)),
+			)
+			e.lastStatus = currentStatus
+		}
 
-	return g.Wait()
+		if waitInterval == 0 {
+			continue
+		}
 
+		timer.Reset(waitInterval)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // Stop performs a graceful shutdown of the Engine.
@@ -260,21 +364,45 @@ func (e *Engine) watchBacklog(ctx context.Context) error {
 }
 
 func (e *Engine) reapExpiredLeases(ctx context.Context) error {
+	// decouple interval from leaseTimeout. Reaping doesn't need to happen
+	// every millisecond a lease expires.
+	// a sensible default is half the lease timeout, or a
+	// fixed background cadence (e.g., 30s to 1m).
+	baseInterval := e.leaseTimeout / 2
+	if baseInterval > 1*time.Minute {
+		baseInterval = 1 * time.Minute
+	}
 
-	ticker := time.NewTicker(e.leaseTimeout)
-	defer ticker.Stop()
+	// calculates next tick with 20% random jitter
+	getJitteredDuration := func(base time.Duration) time.Duration {
+		jitter := time.Duration(rand.Int64N(int64(base / 5)))
+		return base + jitter
+	}
 
-	_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
-
-	utils.LogIfError(e.logger, err, "failed to reap expired leases.", zap.Error(err))
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
 
 	for {
+		rowsAffected, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
+		utils.LogIfError(e.logger, err, "failed to reap expired leases.", zap.Error(err))
+
+		var nextSleep time.Duration
+		if err == nil && rowsAffected >= int64(e.reapBatchSize) {
+			// If we maxed out the batch, there's more garbage to collect.
+			// Sleep briefly (e.g., 100ms) and loop again immediately to drain it
+			nextSleep = 100 * time.Millisecond
+		} else {
+			// Database is clean, sleep for a long, jittered interval
+			nextSleep = getJitteredDuration(baseInterval)
+		}
+
+		timer.Reset(nextSleep)
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
-			_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
-			utils.LogIfError(e.logger, err, "failed to reap expired leases.", zap.Error(err))
+		case <-timer.C:
 		}
 	}
 }
