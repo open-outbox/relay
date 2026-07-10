@@ -130,10 +130,10 @@ make bench-redis
 ```
 
 > [!IMPORTANT]
-> **Broker Persistence**: NATS and Kafka topics/streams in this suite are ephemeral
-> and lost on `docker compose down`. If you are testing error rates or recovery by
-> stopping services, always use `make bench-XXX` to restart them. This ensures the
-> `-setup` containers re-provision the necessary topics/streams.
+> **Broker Persistence**: These commands use the `-setup` containers
+> to provision the necessary topics/streams. In case you fully deleted the
+> broker containers (using `make bench-clean` or `docker compose down -v`)
+> use `make bench-XXX` to restart the brokers properly.
 
 ### 6. Start Seeding
 

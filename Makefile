@@ -121,7 +121,7 @@ down: ## Shut down all infrastructure and remove networks
 	docker compose -f $(COMPOSE_FILE) down
 
 down-%: ## Stop a specific service (e.g., make down-postgres)
-	docker compose -f $(COMPOSE_FILE) stop $*
+	docker compose -f $(COMPOSE_FILE) down $*
 
 logs: ## Follow logs for all running containers
 	docker compose -f $(COMPOSE_FILE) logs -f
