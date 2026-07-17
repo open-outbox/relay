@@ -87,10 +87,7 @@ const (
             SELECT event_id
             FROM {{TABLE}}
             WHERE status = $1
-				AND (
-					locked_at < (now() - $2::interval)
-					OR locked_at IS NULL
-				)
+				AND locked_at < (now() - $2::interval)
             ORDER BY locked_at ASC
             LIMIT $3
             FOR UPDATE SKIP LOCKED

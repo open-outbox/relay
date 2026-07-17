@@ -38,6 +38,7 @@ func TestEngine_GracefulShutdown(t *testing.T) {
 		BatchSize:    10,
 		LeaseTimeout: 1 * time.Minute,
 		EnableStats:  true,
+		EnableReaper: true,
 	}
 
 	tel, err := relay.CreateNoopTelemetry()

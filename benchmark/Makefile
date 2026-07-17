@@ -52,3 +52,10 @@ bench-redis: ## Start stack with Redis profile
 .PHONY: bench-clean
 bench-clean: ## Stop and wipe everything
 	docker compose --profile nats --profile kafka --profile redis down -v
+
+# ==========================================
+# Builds the relay and producer images necessary for a fresh start
+# ==========================================
+.PHONY: bench-build
+bench-build: ## Build the producer and relay images
+	docker compose build producer relay

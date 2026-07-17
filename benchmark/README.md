@@ -109,7 +109,7 @@ HEALTH_CHECK_INTERVAL=5s
 Before running, ensure you build the latest versions of the Relay and Producer images:
 
 ```bash
-docker compose build
+make bench-build
 ```
 
 Then, start the core infrastructure along with the profile for your selected broker:
@@ -215,6 +215,11 @@ This is critical for testing Lock Contention in the Outbox table.
 > Resource Exhaustion: Running high iterations (e.g., -i 20) may exhaust
 > the Docker Bridge network's available ports or trigger Database connection
 > limits (max_connections). Monitor your docker stats during execution.
+>
+> ```bash
+> docker stats $(docker compose ps -q)
+> ```
+
 
 ## Monitoring Results
 

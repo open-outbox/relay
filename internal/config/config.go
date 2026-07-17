@@ -91,8 +91,12 @@ type Config struct {
 	// scans to calculate backlog metrics (e.g., PENDING counts and oldest age).
 	// In high-scale environments with millions of rows, disabling this prevents
 	// performance degradation and database I/O saturation.
-	// 	Default: "true"
+	// 	Default: "false"
 	EnableStats bool `mapstructure:"ENABLE_STATS"`
+
+	// EnableReaper toggles the automated lease cleanup process.
+	// 	Default: true
+	EnableReaper bool `mapstructure:"ENABLE_REAPER"`
 
 	// ServerPort is the address/port for the HTTP health check and metrics server.
 	//	Default: ":8080"
@@ -106,6 +110,12 @@ type Config struct {
 	// locking events in the database to prevent collisions.
 	//	Default: os.Hostname()
 	RelayID string `mapstructure:"RELAY_ID"`
+
+	// EngineMode determines the operational scope of the relay instance.
+	// Options: "default" (full operation), "worker" (event throughput only),
+	// "maintenance" (background tasks only).
+	//	Default: "default"
+	EngineMode string `mapstructure:"ENGINE_MODE"`
 
 	// RetryMaxAttempts is the maximum number of times an event will be
 	// retried before being marked as DEAD.
@@ -307,7 +317,8 @@ func Load() (*Config, error) {
 	v.SetDefault("REAP_BATCH_SIZE", 100)
 	v.SetDefault("HEALTH_CHECK_INTERVAL", "5s")
 	v.SetDefault("PUBLISHER_CONNECT_RETRY_INTERVAL", "5s")
-	v.SetDefault("ENABLE_STATS", true)
+	v.SetDefault("ENABLE_STATS", false)
+	v.SetDefault("ENABLE_REAPER", true)
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
 

@@ -101,6 +101,26 @@ The execution mode for the Relay. Use `development` for more verbose local loggi
 
 ---
 
+### `ENGINE_MODE`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="default"></Badge>
+
+Default: "default"
+
+Defines the operational scope of the relay instance. This setting determines which background routines are initialized at startup:
+
+| Mode | Event Processing | Reaper | Stats |
+| :--- | :--- | :--- | :--- |
+| `default` | Yes | Yes (if enabled) | Yes (if enabled) |
+| `worker` | Yes | No | No |
+| `maintenance` | No | Yes (if enabled) | Yes (if enabled) |
+
+<Aside type="tip">
+  Use `worker` mode to scale throughput across multiple instances. Use `maintenance` mode to offload background tasks (cleanup and telemetry) to a dedicated, low-impact instance.
+</Aside>
+
+---
+
 ## Engine Tuning
 
 Controls how the Relay polls the database and manages event ownership.
@@ -181,7 +201,7 @@ The amount of time the engine waits between failed attempts to establish the ini
 
 <Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="true"></Badge>
 
-Default: true
+Default: false
 
 Determines whether the engine performs background database scans to calculate backlog metrics,
 such as the count of pending events and the age of the oldest record.
@@ -189,7 +209,20 @@ such as the count of pending events and the age of the oldest record.
 <Aside type="caution" title="Performance Implication">
   For high-scale environments (e.g., backlogs exceeding 10M+ rows), it is recommended to set this
    to false to avoid database I/O saturation and performance degradation caused by heavy aggregate scans.
+   Also, note that it's disabled if the engine is running in `worker` mode, see [ENGINE_MODE](#engine_mode)
 </Aside>
+
+---
+
+### `ENABLE_REAPER`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="true"></Badge>
+
+Default: true
+
+Toggles the automated lease cleanup process. When enabled, the engine periodically scans for and
+removes expired event leases to prevent orphaned locks and maintain table health. It's disabled if
+the engine is running in `worker` mode, see [ENGINE_MODE](#engine_mode).
 
 ---
 ### `SERVER_PORT`

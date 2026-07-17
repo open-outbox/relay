@@ -62,6 +62,9 @@ services:
       - STORAGE_URL=postgres://postgres:postgres@postgres:5432/postgres
       - PUBLISHER_TYPE=nats
       - PUBLISHER_URL=nats://nats:4222
+      # Enable db query based metrics i.e. pending_count, oldest_age_seconds
+      - ENABLE_STATS=true
+      # Enable open telemetry
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_METRICS_EXPORTER=otlp
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317

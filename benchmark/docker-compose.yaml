@@ -4,23 +4,36 @@ volumes:
   kafka_data: {}
   redis_data: {}
 
+x-relay-base: &relay-base
+  build:
+    context: ..
+    dockerfile: deployments/Dockerfile
+  image: openoutbox/relay:benchmark
+  depends_on:
+    postgres:
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        cpus: '1'
+        memory: 32M
+  env_file:
+    - .env
+
 services:
+  relay-maintenance:
+    <<: *relay-base
+    deploy:
+      replicas: 1
+    environment:
+      - ENGINE_MODE=maintenance
+      - ENABLE_REAPER=true
+      - ENABLE_STATS=true
 
   relay:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    image: openoutbox/relay:benchmark
-    depends_on:
-      postgres:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 32M
-    env_file:
-      - .env
+    <<: *relay-base
+    environment:
+      - ENGINE_MODE=worker
 
   producer:
     build:
@@ -100,34 +113,38 @@ services:
   kafka:
     image: apache/kafka:3.7.0
     profiles: ["kafka"]
-    ports:
-      - "9092:9092"
     volumes:
       - kafka_data:/var/lib/kafka/data
     environment:
       - KAFKA_NODE_ID=1
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_LOG_DIRS=/var/lib/kafka/data
+      - KAFKA_LOG_SEGMENT_BYTES=1073741824
+
+      # Corrected Networking for Local Mac Host Execution
       - KAFKA_LISTENERS=EXTERNAL://:9092,INTERNAL://:9094,CONTROLLER://:9093
       - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://kafka:9092,INTERNAL://kafka:9094
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+
+      # Single-Node Defaults
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-      - KAFKA_LOG_DIRS=/var/lib/kafka/data
+
+      # High Throughput / Tuning
+      - KAFKA_NUM_NETWORK_THREADS=8
+      - KAFKA_NUM_IO_THREADS=16
+      - KAFKA_HEAP_OPTS=-Xms1G -Xmx1G
+      - KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS=1
+
+      # jmx
       - KAFKA_JMX_PORT=9101
       - JMX_PORT=9101
       - KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.local.only=false -Djava.rmi.server.hostname=localhost
-      - KAFKA_NUM_NETWORK_THREADS=4
-      - KAFKA_NUM_IO_THREADS=8
-      - KAFKA_QUEUED_MAX_REQUESTS=1000
-      - KAFKA_LOG_FLUSH_INTERVAL_MESSAGES=100000
-      - KAFKA_LOG_FLUSH_INTERVAL_MS=5000
-      - KAFKA_HEAP_OPTS=-Xmx4G -Xms4G
-      - KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS=1
 
   kafka-setup:
     image: apache/kafka:3.7.0
@@ -137,9 +154,19 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command: >
       "echo 'Waiting for Kafka...' &&
-      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9094 --list > /dev/null 2>&1; do sleep 1; done &&
-      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9094 --topic openoutbox.events.v1 --partitions 3 --replication-factor 1 &&
+      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list > /dev/null 2>&1; do sleep 1; done &&
+      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic openoutbox.events.v1 --partitions 6 --replication-factor 1 &&
       echo 'Topic setup complete.'"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    profiles: ["kafka"]
+    ports:
+      - "8081:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=benchmark
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_METRICS_PORT=9997
 
   redis:
     image: redis:6-alpine
