@@ -3,6 +3,23 @@
 All notable changes to the **Open Outbox Relay** will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-08-02
+
+### ✨ Added
+
+- **Engine Isolation Control:** Added EngineMode configuration to isolate reaping and stats processing onto a single runner while running workers across multiple active replicas.
+- **Development Tooling**: Integrated kafka-ui into the benchmark suite to improve local cluster observability and testing.
+
+### ⚙️ Changed
+
+- **Benchmark Infrastructure:** Refactored the benchmark suite for better maintainability and performance testing.
+
+🛡️ Fixed
+
+- **SLO Metrics & Targets:** Corrected the Delivery SLO compliance query and fixed the SLO targets variable definitions.
+
+- **Query Optimization:** Simplified the reaping query by removing an redundant lookup condition.
+
 ## [1.1.0] - 2026-06-22
 
 ### ✨ Added
