@@ -11,10 +11,12 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/compress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +88,8 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 				assert.Nil(t, k.dialer.TLS)
 				assert.Nil(t, k.transport.TLS)
 				assert.Nil(t, k.dialer.SASLMechanism)
+				assert.Nil(t, k.transport.SASL)
+				assert.NotNil(t, k.transport.Dial, "transport must use a configured dialer")
 			},
 		},
 		{
@@ -116,6 +120,7 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 				assert.Equal(t, "kafka.production.internal", k.dialer.TLS.ServerName)
 				assert.Equal(t, uint16(tls.VersionTLS13), k.dialer.TLS.MinVersion)
 				assert.Empty(t, k.dialer.TLS.Certificates) // No client certs yet
+				assert.Same(t, k.dialer.TLS, k.transport.TLS)
 			},
 		},
 		{
@@ -168,6 +173,8 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 			assertDetails: func(t *testing.T, k *Kafka) {
 				require.NotNil(t, k.dialer.SASLMechanism)
 				assert.Equal(t, "PLAIN", k.dialer.SASLMechanism.Name())
+				require.NotNil(t, k.transport.SASL, "writer transport must authenticate")
+				assert.Equal(t, "PLAIN", k.transport.SASL.Name())
 			},
 		},
 		{
@@ -182,6 +189,22 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 			assertDetails: func(t *testing.T, k *Kafka) {
 				require.NotNil(t, k.dialer.SASLMechanism)
 				assert.Equal(t, "SCRAM-SHA-256", k.dialer.SASLMechanism.Name())
+				require.NotNil(t, k.transport.SASL, "writer transport must authenticate")
+				assert.Equal(t, "SCRAM-SHA-256", k.transport.SASL.Name())
+			},
+		},
+		{
+			name: "Valid Auth: SASL mechanism is case and whitespace insensitive",
+			cfg: KafkaConfig{
+				Brokers:       []string{"localhost:9092"},
+				SASLMechanism: " SCRAM-SHA-512 ",
+				Username:      "openoutbox-scram",
+				Password:      "scram-secret-password",
+			},
+			expectErr: false,
+			assertDetails: func(t *testing.T, k *Kafka) {
+				require.NotNil(t, k.transport.SASL)
+				assert.Equal(t, "SCRAM-SHA-512", k.transport.SASL.Name())
 			},
 		},
 		{
@@ -192,6 +215,23 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 			},
 			expectErr:   true,
 			errContains: "unsupported SASL mechanism for Kafka",
+		},
+		{
+			name: "Writer receives batching, compression and dial settings",
+			cfg: KafkaConfig{
+				Brokers:           []string{"localhost:9092"},
+				BatchTimeout:      10 * time.Millisecond,
+				Compression:       compress.Snappy,
+				ConnectionTimeout: 3 * time.Second,
+				IdleTimeout:       30 * time.Second,
+			},
+			expectErr: false,
+			assertDetails: func(t *testing.T, k *Kafka) {
+				assert.Equal(t, 10*time.Millisecond, k.writer.BatchTimeout)
+				assert.Equal(t, compress.Snappy, k.writer.Compression)
+				assert.Equal(t, 3*time.Second, k.transport.DialTimeout)
+				assert.Equal(t, 30*time.Second, k.transport.IdleTimeout)
+			},
 		},
 	}
 
@@ -265,4 +305,55 @@ func TestKafka_isKafkaErrorRetryable(t *testing.T) {
 			assert.Equal(t, tt.isRetryable, res)
 		})
 	}
+}
+
+// freeClosedAddr returns an address that nothing is listening on.
+func freeClosedAddr(t *testing.T) string {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
+	return addr
+}
+
+func TestKafka_Ping_MultipleBrokers(t *testing.T) {
+	live, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = live.Close() })
+	go func() {
+		for {
+			c, err := live.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+
+	t.Run("succeeds when any broker is reachable", func(t *testing.T) {
+		k, err := NewKafka(KafkaConfig{
+			Brokers:           []string{freeClosedAddr(t), live.Addr().String()},
+			ConnectionTimeout: time.Second,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = k.Close(context.Background()) })
+
+		assert.NoError(t, k.Ping(context.Background()))
+	})
+
+	t.Run("fails and reports every broker when none are reachable", func(t *testing.T) {
+		a, b := freeClosedAddr(t), freeClosedAddr(t)
+		k, err := NewKafka(KafkaConfig{
+			Brokers:           []string{a, b},
+			ConnectionTimeout: time.Second,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = k.Close(context.Background()) })
+
+		err = k.Ping(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to reach any kafka broker")
+		assert.Contains(t, err.Error(), a)
+		assert.Contains(t, err.Error(), b)
+	})
 }

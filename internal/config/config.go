@@ -242,7 +242,7 @@ type Config struct {
 	// KafkaTLSVersion specifies the minimum TLS version required for the connection.
 	// Supported values: "1.0", "1.1", "1.2", "1.3"
 	//	Default: "1.2"
-	KafkaTLSVersion string `env:"KAFKA_TLS_VERSION" envDefault:"1.2"`
+	KafkaTLSVersion string `mapstructure:"KAFKA_TLS_VERSION"`
 
 	// KafkaServerName specifies the expected Server Name Indication (SNI)
 	// or hostname on the broker certificate. If empty, the broker's
@@ -350,6 +350,7 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_COMPRESSION", "snappy")
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
+	v.SetDefault("KAFKA_TLS_VERSION", "1.2")
 	v.SetDefault("KAFKA_INSECURE", false)
 	v.SetDefault("KAFKA_IDLE_TIMEOUT", "30s")
 	v.SetDefault("KAFKA_KEEP_ALIVE", "30s")

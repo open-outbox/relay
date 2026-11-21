@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
@@ -71,6 +73,8 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 		)
 	}
 
+	cfg.SASLMechanism = strings.ToLower(strings.TrimSpace(cfg.SASLMechanism))
+
 	k := &Kafka{cfg: cfg}
 
 	dialer, transport, err := k.buildTransport()
@@ -90,6 +94,8 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 		ReadTimeout:  cfg.ReadTimeout,
 		BatchSize:    cfg.BatchSize,
 		BatchBytes:   cfg.BatchBytes,
+		BatchTimeout: cfg.BatchTimeout,
+		Compression:  cfg.Compression,
 		Transport:    k.transport,
 	}
 
@@ -174,24 +180,26 @@ func (k *Kafka) Close(_ context.Context) error {
 	return nil
 }
 
-// Ping verifies the connectivity to the Kafka brokers by attempting to
-// fetch metadata or checking the underlying connection state.
+// Ping verifies connectivity to the Kafka cluster. It dials each configured
+// broker in turn (performing the TLS and SASL handshakes when configured)
+// and succeeds as soon as one broker accepts the connection.
 func (k *Kafka) Ping(ctx context.Context) error {
+	errs := make([]error, 0, len(k.cfg.Brokers))
 
-	var addr string
-	if k.writer != nil {
-		addr = k.writer.Addr.String()
-	} else {
-		addr = k.cfg.Brokers[0]
+	for _, addr := range k.cfg.Brokers {
+		conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+
+		errs = append(errs, fmt.Errorf("broker %s: %w", addr, err))
+		if ctx.Err() != nil {
+			break
+		}
 	}
 
-	conn, err := k.dialer.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to dial kafka broker at %s: %w", addr, err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	return nil
+	return fmt.Errorf("failed to reach any kafka broker: %w", errors.Join(errs...))
 }
 
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
@@ -365,9 +373,19 @@ func (k *Kafka) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 		dialer.SASLMechanism = mechanism
 	}
 
+	// The Transport is what the Writer uses to produce messages, so it needs
+	// its own dial, TLS and SASL settings; it does not inherit them from the
+	// Dialer above (which is only used by Ping).
+	netDialer := &net.Dialer{
+		Timeout:   k.cfg.ConnectionTimeout,
+		KeepAlive: k.cfg.KeepAlive,
+	}
+
 	transport := &kafka.Transport{
-		Dial:        dialer.DialFunc,
+		Dial:        netDialer.DialContext,
+		DialTimeout: k.cfg.ConnectionTimeout,
 		TLS:         tlsConfig,
+		SASL:        dialer.SASLMechanism,
 		IdleTimeout: k.cfg.IdleTimeout,
 	}
 

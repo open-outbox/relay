@@ -146,6 +146,14 @@ func setupRedis(t *testing.T) (*redis_go.Client, string) {
 
 func setupKafka(t *testing.T, topic string) string {
 	t.Helper()
+	broker, _ := setupKafkaContainer(t, topic)
+	return broker
+}
+
+// setupKafkaContainer is like setupKafka but also returns the container so
+// tests can stop the broker to simulate an outage.
+func setupKafkaContainer(t *testing.T, topic string) (string, *kafka.KafkaContainer) {
+	t.Helper()
 	ctx := context.Background()
 
 	// The official module handles the "Advertised Listener" logic for you
@@ -164,7 +172,7 @@ func setupKafka(t *testing.T, topic string) string {
 	// Create topic
 	createKafkaTopic(t, broker, topic)
 
-	return broker
+	return broker, kafkaContainer
 }
 
 func createKafkaTopic(t *testing.T, broker string, topic string) {

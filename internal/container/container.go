@@ -239,7 +239,11 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 
 	tlsVersion := tls.VersionTLS12
 
-	if version, exists := tlsVersionMap[cfg.KafkaTLSVersion]; exists {
+	if v := strings.TrimSpace(cfg.KafkaTLSVersion); v != "" {
+		version, exists := tlsVersionMap[v]
+		if !exists {
+			return nil, fmt.Errorf("unsupported Kafka TLS version: %s", cfg.KafkaTLSVersion)
+		}
 		tlsVersion = int(version)
 	}
 
@@ -261,7 +265,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		TLSVersion:        uint16(tlsVersion),
 		ServerName:        cfg.KafkaServerName,
 		Insecure:          cfg.KafkaInsecure,
-		SASLMechanism:     cfg.KafkaSASLMechanism,
+		SASLMechanism:     mechanism,
 		Username:          cfg.KafkaUsername,
 		Password:          cfg.KafkaPassword,
 		IdleTimeout:       cfg.KafkaIdleTimeout,
