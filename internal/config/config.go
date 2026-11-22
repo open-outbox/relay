@@ -221,6 +221,14 @@ type Config struct {
 	//	strict "At-Least-Once" delivery guarantees.
 	KafkaRequiredAcks string `mapstructure:"KAFKA_REQUIRED_ACKS"`
 
+	// KafkaTLSEnabled enables TLS for broker connections. Without a CA,
+	// the broker certificate is verified against the system trust store,
+	// which is what managed Kafka services with public certificates need.
+	// TLS is also enabled implicitly when KafkaTLSCA, KafkaTLSCert,
+	// KafkaTLSKey or KafkaInsecure is set.
+	//	Default: false
+	KafkaTLSEnabled bool `mapstructure:"KAFKA_TLS_ENABLED"`
+
 	// KafkaTLSCA can be a filesystem path to a Root CA certificate,
 	// a Base64 encoded string of the CA certificate, or the raw PEM data.
 	// Used to verify the Kafka broker's identity.
@@ -350,6 +358,7 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_COMPRESSION", "snappy")
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
+	v.SetDefault("KAFKA_TLS_ENABLED", false)
 	v.SetDefault("KAFKA_TLS_VERSION", "1.2")
 	v.SetDefault("KAFKA_INSECURE", false)
 	v.SetDefault("KAFKA_IDLE_TIMEOUT", "30s")

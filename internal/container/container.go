@@ -259,6 +259,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		Async:             cfg.KafkaAsync,
 		Compression:       comp,
 		RequiredAcks:      acks,
+		TLSEnabled:        cfg.KafkaTLSEnabled,
 		TLSCA:             cfg.KafkaTLSCA,
 		TLSCert:           cfg.KafkaTLSCert,
 		TLSKey:            cfg.KafkaTLSKey,

@@ -448,6 +448,16 @@ The number of acknowledgments the producer requires the leader to have received 
 
 ---
 
+### `KAFKA_TLS_ENABLED`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Boolean" />
+
+**Default:** `false`
+
+Enables TLS for connections to the Kafka brokers. When no `KAFKA_TLS_CA` is provided, the broker's certificate is verified against the operating system's trust store, which is what managed Kafka services with publicly trusted certificates (Confluent Cloud, Amazon MSK, Aiven, ...) require. TLS is also enabled automatically when `KAFKA_TLS_CA`, `KAFKA_TLS_CERT`, `KAFKA_TLS_KEY` or `KAFKA_INSECURE` is set.
+
+---
+
 ### `KAFKA_TLS_CA`
 
 <Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />

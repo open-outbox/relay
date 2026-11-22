@@ -106,6 +106,23 @@ func TestKafka_NewKafka_TransportConfigurations(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid TLS Enabled without CA uses system trust store",
+			cfg: KafkaConfig{
+				Brokers:    []string{"localhost:9092"},
+				TLSEnabled: true,
+				TLSVersion: tls.VersionTLS12,
+			},
+			expectErr: false,
+			assertDetails: func(t *testing.T, k *Kafka) {
+				require.NotNil(t, k.dialer.TLS)
+				assert.Nil(t, k.dialer.TLS.RootCAs, "nil RootCAs means system roots")
+				assert.False(t, k.dialer.TLS.InsecureSkipVerify)
+				assert.Empty(t, k.dialer.TLS.Certificates)
+				assert.Equal(t, uint16(tls.VersionTLS12), k.dialer.TLS.MinVersion)
+				assert.Same(t, k.dialer.TLS, k.transport.TLS)
+			},
+		},
+		{
 			name: "Valid One-Way TLS with Explicit CA Inline/PEM Data",
 			cfg: KafkaConfig{
 				Brokers:    []string{"localhost:9092"},

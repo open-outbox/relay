@@ -38,6 +38,7 @@ type KafkaConfig struct {
 	Async             bool
 	Compression       kafka.Compression
 	RequiredAcks      kafka.RequiredAcks
+	TLSEnabled        bool
 	TLSCA             string
 	TLSCert           string
 	TLSKey            string
@@ -325,8 +326,13 @@ func (k *Kafka) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 		return nil, nil, fmt.Errorf("failed to load TLS Key: %w", err)
 	}
 
+	// Supplying any TLS material, or asking to skip verification, implies TLS.
+	// TLSEnabled covers brokers with publicly trusted certificates, where none
+	// of those are needed: RootCAs stays nil and the system trust store is used.
+	tlsEnabled := k.cfg.TLSEnabled || ca != nil || cert != nil || key != nil || k.cfg.Insecure
+
 	var tlsConfig *tls.Config
-	if ca != nil || cert != nil || key != nil || k.cfg.Insecure {
+	if tlsEnabled {
 		tlsConfig = &tls.Config{
 			ServerName:         k.cfg.ServerName,
 			InsecureSkipVerify: k.cfg.Insecure,
