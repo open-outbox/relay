@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,8 +23,13 @@ func TestEngine_GracefulShutdown(t *testing.T) {
 	store := new(relay.MockStorage)
 	pub := new(relay.MockPublisher)
 
+	// Signal the first claim so we only cancel once the loop is past its
+	// random startup jitter (otherwise ClaimBatch may never be called).
+	claimed := make(chan struct{})
+	var claimedOnce sync.Once
 	store.On("ClaimBatch", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return([]relay.Event{}, nil)
+		Return([]relay.Event{}, nil).
+		Run(func(mock.Arguments) { claimedOnce.Do(func() { close(claimed) }) })
 	store.On("Close", mock.Anything).Return(nil)
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
 		Return(int64(0), nil)
@@ -55,8 +61,12 @@ func TestEngine_GracefulShutdown(t *testing.T) {
 		done <- engine.Start(ctx)
 	}()
 
-	// Let it run for a few ticks
-	time.Sleep(50 * time.Millisecond)
+	// Let it run until the processing loop has actually started
+	select {
+	case <-claimed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("processing loop never claimed a batch")
+	}
 
 	// Trigger Shutdown
 	cancel()
@@ -96,6 +106,11 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 		Payload: []byte(`{}`),
 	}
 
+	// Closed once the engine has marked the event as failed. The processing
+	// loop sleeps a random startup jitter (up to 50ms) before its first claim,
+	// so a fixed sleep here is racy on slow CI runners.
+	markedFailed := make(chan struct{})
+
 	// --- Mocks ---
 	store.On("ClaimBatch", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return([]relay.Event{event}, nil).Once()
@@ -112,7 +127,8 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 
 	store.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(f []relay.FailedEvent) bool {
 		return len(f) == 1 && f[0].ID == eventID && f[0].NewStatus == relay.EventStatusDead
-	}), mock.Anything).Return(int64(0), nil).Once()
+	}), mock.Anything).Return(int64(0), nil).Once().
+		Run(func(mock.Arguments) { close(markedFailed) })
 
 	// Silence background noise
 	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
@@ -137,11 +153,12 @@ func TestEngine_NonRetryableError_MovesToDead(t *testing.T) {
 		_ = engine.Start(ctx)
 	}()
 
-	// Give it a realistic window to fire the loops and process the event.
-	// 50ms is plenty for a 10ms interval.
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-markedFailed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("engine did not mark the poison event as failed in time")
+	}
 
-	// Now that we've waited, AssertExpectations should pass immediately.
 	assert.True(t, store.AssertExpectations(t), "Storage expectations not met")
 	assert.True(t, pub.AssertExpectations(t), "Publisher expectations not met")
 
@@ -172,8 +189,10 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 		Return(fullBatch, nil).Once()
 
 	// Return an empty batch so that the engine will sleep for Interval duration
+	drained := make(chan struct{})
 	store.On("ClaimBatch", mock.Anything, 10, mock.Anything).
-		Return([]relay.Event{}, nil).Once()
+		Return([]relay.Event{}, nil).Once().
+		Run(func(mock.Arguments) { close(drained) })
 
 	// Handle the publishing of the 10 events
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil).Times(20)
@@ -200,10 +219,14 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 		_ = engine.Start(ctx)
 	}()
 
-	// We sleep for a very short time (way less than the Interval).
-	// If the engine waits for the ticker, it will only have called ClaimBatch once.
-	// If it drains, it will have called it twice and met the expectations.
-	time.Sleep(50 * time.Millisecond)
+	// Wait well under the 1s Interval (but far beyond the startup jitter).
+	// If the engine waited for the ticker between full batches, the third
+	// ClaimBatch would not happen within this window.
+	select {
+	case <-drained:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Engine did not drain the backlog immediately")
+	}
 
 	assert.True(t, store.AssertExpectations(t), "Engine did not drain the backlog immediately")
 	cancel()
