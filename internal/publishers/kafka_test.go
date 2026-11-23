@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"testing"
@@ -298,13 +299,56 @@ func TestKafka_isKafkaErrorRetryable(t *testing.T) {
 			isRetryable: false,
 		},
 		{
+			name:        "Fatal Error: Batch exceeds broker limits",
+			err:         kafka.RecordListTooLarge,
+			isRetryable: false,
+		},
+		{
+			name:        "Fatal Error: Broker rejected the record",
+			err:         kafka.InvalidRecord,
+			isRetryable: false,
+		},
+		{
+			name:        "Unknown topic is transient (leader move, auto-creation)",
+			err:         kafka.UnknownTopicOrPartition,
+			isRetryable: true,
+		},
+		{
+			name:        "Corrupt message is transient (in-transit CRC failure)",
+			err:         kafka.InvalidMessage,
+			isRetryable: true,
+		},
+		{
+			name:        "Auth failures stay retryable so misconfig does not kill events",
+			err:         kafka.SASLAuthenticationFailed,
+			isRetryable: true,
+		},
+		{
+			name:        "Client-side oversize message (exceeds BatchBytes) is fatal",
+			err:         kafka.MessageTooLargeError{},
+			isRetryable: false,
+		},
+		{
+			name:        "Wrapped Kafka errors are still classified",
+			err:         fmt.Errorf("write: %w", kafka.MessageSizeTooLarge),
+			isRetryable: false,
+		},
+		{
 			name: "Batch errors containing even one fatal error must be marked non-retryable",
 			err: kafka.WriteErrors{
 				nil,
-				kafka.UnknownTopicOrPartition, // This is non-retryable
+				kafka.MessageSizeTooLarge, // This is non-retryable
 				nil,
 			},
 			isRetryable: false,
+		},
+		{
+			name: "Batch errors with an unknown topic stay retryable",
+			err: kafka.WriteErrors{
+				nil,
+				kafka.UnknownTopicOrPartition,
+			},
+			isRetryable: true,
 		},
 		{
 			name: "Batch errors containing only network hiccups stay retryable",

@@ -4,6 +4,9 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"testing"
 	"time"
 
@@ -103,9 +106,10 @@ func startKafkaEngine(ctx context.Context, t *testing.T) {
 	require.NoError(t, err)
 }
 
-// An unknown topic is a non-retryable error: the event must be killed on the
-// first attempt rather than scheduled for retry.
-func TestKafka_UnknownTopic_MarksEventDead(t *testing.T) {
+// An unknown topic is a retryable error: Kafka returns it transiently during
+// leader moves and topic auto-creation, so the event must be scheduled for
+// retry rather than killed.
+func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -113,11 +117,64 @@ func TestKafka_UnknownTopic_MarksEventDead(t *testing.T) {
 	kafkaBrokers := setupKafka(t, "unused-topic")
 	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
+	// Fail fast inside the writer, and push the retry far enough out that
+	// the engine won't pick the event up again during the test.
+	t.Setenv("KAFKA_MAX_ATTEMPTS", "1")
+	t.Setenv("RETRY_BASE_DELAY", "1m")
+
 	eventID := uuid.New()
+	insertedAt := time.Now()
 	_, err := db.Exec(`
         INSERT INTO openoutbox_events (event_id, event_type, payload)
         VALUES ($1, $2, '{"data":"fail"}')`,
 		eventID, "this.topic.does.not.exist")
+	require.NoError(t, err)
+
+	startKafkaEngine(ctx, t)
+
+	var (
+		status      string
+		attempts    int
+		availableAt time.Time
+		lastError   *string
+	)
+	require.Eventually(t, func() bool {
+		err := db.QueryRow(
+			"SELECT status, attempts, available_at, last_error FROM openoutbox_events WHERE event_id = $1",
+			eventID,
+		).Scan(&status, &attempts, &availableAt, &lastError)
+		return err == nil && attempts == 1
+	}, 20*time.Second, 200*time.Millisecond, "event with unknown topic should be attempted once")
+
+	assert.Equal(t, "PENDING", status, "unknown topic must be retried, not killed")
+	assert.True(t, availableAt.After(insertedAt), "retry must be scheduled in the future")
+	require.NotNil(t, lastError)
+	assert.Contains(t, *lastError, "Unknown Topic Or Partition")
+}
+
+// A message larger than the broker's limit can never succeed: the event must
+// be killed on the first attempt rather than scheduled for retry.
+func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	topic := "outbox.oversized.v1"
+	db, pgConnStr := setupTestPostgres(t)
+	kafkaBrokers := setupKafka(t, topic)
+	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
+
+	// Random bytes don't compress, so the record stays above the broker's
+	// default 1MB message.max.bytes even with snappy enabled.
+	raw := make([]byte, 3<<20)
+	_, err := rand.Read(raw)
+	require.NoError(t, err)
+	payload := fmt.Sprintf(`{"data":%q}`, base64.StdEncoding.EncodeToString(raw))
+
+	eventID := uuid.New()
+	_, err = db.Exec(
+		`INSERT INTO openoutbox_events (event_id, event_type, payload) VALUES ($1, $2, $3)`,
+		eventID, topic, payload,
+	)
 	require.NoError(t, err)
 
 	startKafkaEngine(ctx, t)
@@ -133,11 +190,11 @@ func TestKafka_UnknownTopic_MarksEventDead(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &lastError)
 		return err == nil && status == "DEAD"
-	}, 10*time.Second, 200*time.Millisecond, "event with unknown topic should be marked DEAD")
+	}, 20*time.Second, 200*time.Millisecond, "oversized event should be marked DEAD")
 
 	assert.Equal(t, 1, attempts, "non-retryable errors must not be retried")
 	require.NotNil(t, lastError)
-	assert.Contains(t, *lastError, "Unknown Topic Or Partition")
+	assert.Contains(t, *lastError, "Message Size Too Large")
 }
 
 // A broker outage is a retryable error: the event must go back to PENDING

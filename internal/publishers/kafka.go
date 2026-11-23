@@ -271,12 +271,21 @@ func isIndividualKafkaErrorRetryable(err error) bool {
 		return true
 	}
 
+	// Only errors caused by the message itself are permanent: retrying the
+	// same event can never succeed. Everything else (leader elections,
+	// metadata propagation, auth or ACL misconfiguration, broker outages)
+	// can resolve without the event changing, so it stays retryable.
+	//
+	// Note that UnknownTopicOrPartition and InvalidMessage (CORRUPT_MESSAGE)
+	// are deliberately absent: Kafka marks both as retriable, since they
+	// occur transiently during leader moves, topic auto-creation and
+	// in-transit corruption.
 	switch kErr {
 	case
-		kafka.InvalidMessage,
-		kafka.UnknownTopicOrPartition,
 		kafka.InvalidMessageSize,
 		kafka.MessageSizeTooLarge,
+		kafka.RecordListTooLarge,
+		kafka.InvalidRecord,
 		kafka.InvalidTopic:
 		return false
 	default:
