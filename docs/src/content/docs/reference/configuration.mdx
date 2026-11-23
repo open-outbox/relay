@@ -438,6 +438,24 @@ The compression codec used for messages sent to Kafka. Supported options: `none`
 
 ---
 
+### `KAFKA_PARTITIONER`
+
+<Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>
+
+**Default:** `fnv1a`
+
+The hash used to map a message's partition key to a partition. If other producers write the same keys to the
+same topics, choose the option that matches their client, or the same key will land on different partitions.
+
+- `fnv1a`: FNV-1a, compatible with Sarama. The default.
+- `murmur2`: compatible with the Java client, Kafka Streams, Kafka Connect, ksqlDB and Flink.
+- `crc32`: compatible with librdkafka-based clients (confluent-kafka-go, Python, .NET, Node).
+
+Changing this on a topic that already has data moves existing keys to different partitions. See
+[Partitioning & Ordering](/guides/kafka/#partitioning--ordering).
+
+---
+
 ### `KAFKA_REQUIRED_ACKS`
 
 <Badge variant="note" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>

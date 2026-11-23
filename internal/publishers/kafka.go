@@ -38,6 +38,7 @@ type KafkaConfig struct {
 	Async             bool
 	Compression       kafka.Compression
 	RequiredAcks      kafka.RequiredAcks
+	Balancer          kafka.Balancer
 	TLSEnabled        bool
 	TLSCA             string
 	TLSCert           string
@@ -63,9 +64,10 @@ type Kafka struct {
 
 // NewKafka builds the Kafka writer from cfg. It expects cfg.Brokers to hold
 // plain host:port addresses (URL parsing happens in the container), builds a
-// shared TLS/SASL transport for producing and pinging, and uses a Hash
-// balancer so messages with the same PartitionKey always land on the same
-// partition. No connection is opened here; call Connect to verify reachability.
+// shared TLS/SASL transport for producing and pinging, and routes messages
+// with cfg.Balancer (kafka.Hash when nil) so messages with the same
+// PartitionKey always land on the same partition. No connection is opened
+// here; call Connect to verify reachability.
 func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
 	if len(cfg.Brokers) < 1 || (len(cfg.Brokers) == 1 && cfg.Brokers[0] == "") {
@@ -85,9 +87,14 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 	k.dialer = dialer
 	k.transport = transport
 
+	balancer := cfg.Balancer
+	if balancer == nil {
+		balancer = &kafka.Hash{}
+	}
+
 	k.writer = &kafka.Writer{
 		Addr:         kafka.TCP(k.cfg.Brokers...),
-		Balancer:     &kafka.Hash{},
+		Balancer:     balancer,
 		RequiredAcks: cfg.RequiredAcks,
 		Async:        cfg.Async,
 		MaxAttempts:  cfg.MaxAttempts,

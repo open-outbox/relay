@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/open-outbox/relay/internal/config"
@@ -48,4 +49,32 @@ func TestBuildKafkaPublisher_Config(t *testing.T) {
 			require.IsType(t, &publishers.Kafka{}, p)
 		})
 	}
+}
+
+func TestBuildKafkaPublisher_Partitioner(t *testing.T) {
+	base := config.Config{
+		PublisherURL:      "kafka://localhost:9092",
+		KafkaCompression:  "none",
+		KafkaRequiredAcks: "all",
+	}
+
+	for _, in := range []string{"", "fnv1a", " FNV1A ", "murmur2", "Murmur2", "crc32", " CRC32 \t"} {
+		t.Run(fmt.Sprintf("accepts %q", in), func(t *testing.T) {
+			cfg := base
+			cfg.KafkaPartitioner = in
+
+			p, err := buildKafkaPublisher(cfg)
+			require.NoError(t, err)
+			require.IsType(t, &publishers.Kafka{}, p)
+		})
+	}
+
+	t.Run("rejects unknown partitioners", func(t *testing.T) {
+		cfg := base
+		cfg.KafkaPartitioner = "xxhash"
+
+		_, err := buildKafkaPublisher(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported Kafka partitioner: xxhash")
+	})
 }

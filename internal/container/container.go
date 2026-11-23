@@ -218,6 +218,21 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaRequiredAcks)
 	}
 
+	balancerMap := map[string]kafka.Balancer{
+		"":        &kafka.Hash{},           // fnv1a (Sarama-compatible)
+		"fnv1a":   &kafka.Hash{},           // Sarama-compatible
+		"murmur2": kafka.Murmur2Balancer{}, // Java client, Streams, Connect
+		"crc32":   kafka.CRC32Balancer{},   // librdkafka consistent_random
+	}
+
+	balancer, ok := balancerMap[strings.ToLower(strings.TrimSpace(cfg.KafkaPartitioner))]
+	if !ok {
+		return nil, fmt.Errorf(
+			"unsupported Kafka partitioner: %s (supported: fnv1a, murmur2, crc32)",
+			cfg.KafkaPartitioner,
+		)
+	}
+
 	mechanism := strings.ToLower(strings.TrimSpace(cfg.KafkaSASLMechanism))
 	if mechanism != "" {
 		switch mechanism {
@@ -259,6 +274,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		Async:             cfg.KafkaAsync,
 		Compression:       comp,
 		RequiredAcks:      acks,
+		Balancer:          balancer,
 		TLSEnabled:        cfg.KafkaTLSEnabled,
 		TLSCA:             cfg.KafkaTLSCA,
 		TLSCert:           cfg.KafkaTLSCert,

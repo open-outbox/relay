@@ -466,3 +466,20 @@ func TestCloseWithContext(t *testing.T) {
 		}
 	})
 }
+
+func TestNewKafka_Balancer(t *testing.T) {
+	t.Run("defaults to FNV-1a hash when unset", func(t *testing.T) {
+		k, err := NewKafka(KafkaConfig{Brokers: []string{"localhost:9092"}})
+		require.NoError(t, err)
+		assert.IsType(t, &kafka.Hash{}, k.writer.Balancer)
+	})
+
+	t.Run("uses the configured balancer", func(t *testing.T) {
+		k, err := NewKafka(KafkaConfig{
+			Brokers:  []string{"localhost:9092"},
+			Balancer: kafka.Murmur2Balancer{},
+		})
+		require.NoError(t, err)
+		assert.IsType(t, kafka.Murmur2Balancer{}, k.writer.Balancer)
+	})
+}
