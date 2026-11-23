@@ -3,6 +3,29 @@
 All notable changes to the **Open Outbox Relay** will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-23
+
+### ✨ Added
+
+- **Public-CA TLS for Kafka:** Added `KAFKA_TLS_ENABLED` to enable TLS without supplying a CA, verifying brokers against the system trust store. Required for managed Kafka services with publicly trusted certificates.
+- **Selectable Kafka Partitioner:** Added `KAFKA_PARTITIONER` to choose how partition keys are hashed, so the Relay can share topics with other producers without splitting a key across partitions: `fnv1a` (Sarama, default), `murmur2` (Java client, Kafka Streams, Kafka Connect) or `crc32` (librdkafka).
+
+### ⚙️ Changed
+
+- **Kafka Retry Classification:** `UnknownTopicOrPartition` and `InvalidMessage` are now retried with backoff instead of killing the event, since Kafka returns both transiently during leader moves, topic auto-creation and in-transit corruption. `RecordListTooLarge` and `InvalidRecord` are now treated as permanent. Events with a misspelled `event_type` now reach `DEAD` only after the retry policy is exhausted.
+- **Stricter TLS Version Validation:** An unsupported `KAFKA_TLS_VERSION` now fails at startup instead of silently falling back to TLS 1.2.
+
+### 🛡️ Fixed
+
+- **Kafka Producer Security Settings:** TLS, mTLS, SASL and batching settings are now applied to the producer. Previously they only applied to the connectivity check, so messages were published without the configured TLS and SASL. If you rely on TLS or SASL, verify your settings after upgrading, as they are now enforced.
+- **Graceful Kafka Shutdown:** The Kafka publisher now honors the shutdown deadline when flushing, and releases the transport's pooled broker connections on close.
+- **Documentation:** Corrected the `SERVER_PORT` URL on the diagnostics page.
+
+### 🧪 Testing
+
+- Added Kafka integration tests for one-way TLS, mutual TLS, system trust store verification, insecure mode, unknown topics and oversized messages.
+- Replaced fixed sleeps in engine tests with mock call signals for faster, less flaky runs.
+
 ## [1.2.0] - 2026-08-02
 
 ### ✨ Added
