@@ -4,9 +4,6 @@ package integration
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"fmt"
 	"testing"
 	"time"
 
@@ -163,15 +160,10 @@ func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
 	kafkaBrokers := setupKafka(t, topic)
 	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
-	// Random bytes don't compress, so the record stays above the broker's
-	// default 1MB message.max.bytes even with snappy enabled.
-	raw := make([]byte, 3<<20)
-	_, err := rand.Read(raw)
-	require.NoError(t, err)
-	payload := fmt.Sprintf(`{"data":%q}`, base64.StdEncoding.EncodeToString(raw))
+	payload := oversizedKafkaPayload(t)
 
 	eventID := uuid.New()
-	_, err = db.Exec(
+	_, err := db.Exec(
 		`INSERT INTO openoutbox_events (event_id, event_type, payload) VALUES ($1, $2, $3)`,
 		eventID, topic, payload,
 	)

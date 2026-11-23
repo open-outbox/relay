@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -416,5 +417,52 @@ func TestKafka_Ping_MultipleBrokers(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to reach any kafka broker")
 		assert.Contains(t, err.Error(), a)
 		assert.Contains(t, err.Error(), b)
+	})
+}
+
+func TestKafka_Close(t *testing.T) {
+	t.Run("is safe on a nil or unbuilt publisher", func(t *testing.T) {
+		var k *Kafka
+		assert.NoError(t, k.Close(context.Background()))
+		assert.NoError(t, (&Kafka{}).Close(context.Background()))
+	})
+
+	t.Run("returns promptly when nothing is buffered", func(t *testing.T) {
+		k, err := NewKafka(KafkaConfig{Brokers: []string{freeClosedAddr(t)}})
+		require.NoError(t, err)
+		assert.NoError(t, k.Close(context.Background()))
+	})
+}
+
+func TestCloseWithContext(t *testing.T) {
+	t.Run("returns the close result when it finishes in time", func(t *testing.T) {
+		assert.NoError(t, closeWithContext(context.Background(), func() error { return nil }))
+
+		boom := errors.New("boom")
+		err := closeWithContext(context.Background(), func() error { return boom })
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("gives up when the context expires and lets close finish later", func(t *testing.T) {
+		release := make(chan struct{})
+		finished := make(chan struct{})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		err := closeWithContext(ctx, func() error {
+			<-release // simulate a flush stuck on an unresponsive broker
+			close(finished)
+			return nil
+		})
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+
+		// The background close must still be able to complete (no leak).
+		close(release)
+		select {
+		case <-finished:
+		case <-time.After(time.Second):
+			t.Fatal("background close never completed")
+		}
 	})
 }

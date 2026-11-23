@@ -4,7 +4,9 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -224,4 +226,16 @@ func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tab
 	if err != nil {
 		panic(fmt.Sprintf("failed to seed postgres: %v", err))
 	}
+}
+
+// oversizedKafkaPayload returns a JSON payload larger than the broker's
+// default 1MB message.max.bytes. Random bytes don't compress, so the record
+// stays oversized even with snappy enabled. Publishing it fails with the
+// non-retryable MessageSizeTooLarge error.
+func oversizedKafkaPayload(t *testing.T) string {
+	t.Helper()
+	raw := make([]byte, 3<<20)
+	_, err := rand.Read(raw)
+	require.NoError(t, err)
+	return fmt.Sprintf(`{"data":%q}`, base64.StdEncoding.EncodeToString(raw))
 }

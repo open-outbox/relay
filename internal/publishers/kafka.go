@@ -61,11 +61,11 @@ type Kafka struct {
 	transport *kafka.Transport
 }
 
-// NewKafka initializes a new Kafka writer with strict ordering and safety.
-// It handles the parsing of broker URLs (stripping kafka:// prefixes)
-// and configures the underlying writer with a Hash balancer to ensure
-// messages with the same PartitionKey are always routed to the same
-// Kafka partition.
+// NewKafka builds the Kafka writer from cfg. It expects cfg.Brokers to hold
+// plain host:port addresses (URL parsing happens in the container), builds a
+// shared TLS/SASL transport for producing and pinging, and uses a Hash
+// balancer so messages with the same PartitionKey always land on the same
+// partition. No connection is opened here; call Connect to verify reachability.
 func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
 	if len(cfg.Brokers) < 1 || (len(cfg.Brokers) == 1 && cfg.Brokers[0] == "") {
@@ -104,8 +104,9 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
 }
 
-// Connect satisfies the relay.Publisher interface.
-// It initializes the Kafka writer using the stored configuration.
+// Connect satisfies the relay.Publisher interface. The writer is created by
+// NewKafka and connects lazily, so Connect only verifies that at least one
+// broker is reachable (including the TLS and SASL handshakes).
 func (k *Kafka) Connect(ctx context.Context) error {
 	if err := k.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to establish broker connectivity: %w", err)
@@ -166,19 +167,45 @@ func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 }
 
 // Close gracefully shuts down the Kafka publisher.
-// It blocks until all buffered messages are flushed or the context expires.
-func (k *Kafka) Close(_ context.Context) error {
+// It blocks until all buffered messages are flushed or the context expires,
+// whichever comes first. If the context expires, Close returns its error and
+// any messages still buffered (async mode) may be lost; the flush keeps
+// running in the background until the writer's own timeouts end it.
+func (k *Kafka) Close(ctx context.Context) error {
 	if k == nil || k.writer == nil {
 		return nil // Safe to close if never connected
 	}
 
-	// k.writer.Close() returns an error if the flush fails or if
-	// the underlying connections cannot be closed cleanly.
-	if err := k.writer.Close(); err != nil {
-		return fmt.Errorf("failed to close kafka writer: %w", err)
-	}
+	return closeWithContext(ctx, func() error {
+		err := k.writer.Close()
+		// The writer only closes transports it created itself; ours is
+		// passed in explicitly, so release its pooled connections here.
+		if k.transport != nil {
+			k.transport.CloseIdleConnections()
+		}
+		return err
+	})
+}
 
-	return nil
+// closeWithContext runs closeFn and waits for it, giving up when ctx is done.
+// closeFn keeps running in the background after a timeout; the result
+// channel is buffered so that goroutine can always finish and exit.
+func closeWithContext(ctx context.Context, closeFn func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- closeFn() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("failed to close kafka writer: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf(
+			"kafka writer close did not finish before shutdown deadline: %w",
+			ctx.Err(),
+		)
+	}
 }
 
 // Ping verifies connectivity to the Kafka cluster. It dials each configured

@@ -259,12 +259,14 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	t.Setenv("KAFKA_WRITE_TIMEOUT", "10s") // THE TRAP: This gives us a 10s window
 
 	// 2. SEED: An event already "DELIVERING" by the OLD zombie worker
-	// It's already expired (locked 5 mins ago)
+	// It's already expired (locked 5 mins ago). Its payload exceeds the
+	// broker's message size limit, so publishing fails permanently.
 	_, err := db.Exec(`
         INSERT INTO openoutbox_events (
             event_id, event_type, payload, status, locked_by, locked_at, available_at
-        ) VALUES ($1, 'test.event.nonexistence', '{}', 'DELIVERING', $2, $3, $4)`,
-		eventID, oldWorkerID, time.Now().Add(-5*time.Minute), time.Now().Add(-10*time.Minute))
+        ) VALUES ($1, 'test.event', $2, 'DELIVERING', $3, $4, $5)`,
+		eventID, oversizedKafkaPayload(t), oldWorkerID,
+		time.Now().Add(-5*time.Minute), time.Now().Add(-10*time.Minute))
 	require.NoError(t, err)
 
 	di, _ := container.BuildContainer(ctx)
@@ -275,14 +277,14 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	// and reaps it
 	// B) Worker runs: Sees event is PENDING and available, claims it.
 	//    Sets status='DELIVERING', locked_by='fast-worker-01'
-	// C) The topic doesn't exists, so the fast worker will move the event back to PENDING
+	// C) The message is too large, so the fast worker moves the event to DEAD
 	di.Invoke(func(engine *relay.Engine) {
 		go engine.Start(ctx)
 	})
 
 	// STEP A: The Engine reaps and then CLAIMS the event.
-	// Because the topic doesn't exist, the worker fails immediately (or after retries)
-	// and moves the event to 'DEAD' because it's a non-retryable metadata error..
+	// Because the message is too large, the worker fails immediately and moves
+	// the event to 'DEAD' because MessageSizeTooLarge is non-retryable.
 	assert.Eventually(t, func() bool {
 		var lockedBy *string
 		var status string
