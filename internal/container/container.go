@@ -218,6 +218,21 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaRequiredAcks)
 	}
 
+	balancerMap := map[string]kafka.Balancer{
+		"":        &kafka.Hash{},           // fnv1a (Sarama-compatible)
+		"fnv1a":   &kafka.Hash{},           // Sarama-compatible
+		"murmur2": kafka.Murmur2Balancer{}, // Java client, Streams, Connect
+		"crc32":   kafka.CRC32Balancer{},   // librdkafka consistent_random
+	}
+
+	balancer, ok := balancerMap[strings.ToLower(strings.TrimSpace(cfg.KafkaPartitioner))]
+	if !ok {
+		return nil, fmt.Errorf(
+			"unsupported Kafka partitioner: %s (supported: fnv1a, murmur2, crc32)",
+			cfg.KafkaPartitioner,
+		)
+	}
+
 	mechanism := strings.ToLower(strings.TrimSpace(cfg.KafkaSASLMechanism))
 	if mechanism != "" {
 		switch mechanism {
@@ -239,7 +254,11 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 
 	tlsVersion := tls.VersionTLS12
 
-	if version, exists := tlsVersionMap[cfg.KafkaTLSVersion]; exists {
+	if v := strings.TrimSpace(cfg.KafkaTLSVersion); v != "" {
+		version, exists := tlsVersionMap[v]
+		if !exists {
+			return nil, fmt.Errorf("unsupported Kafka TLS version: %s", cfg.KafkaTLSVersion)
+		}
 		tlsVersion = int(version)
 	}
 
@@ -255,13 +274,15 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		Async:             cfg.KafkaAsync,
 		Compression:       comp,
 		RequiredAcks:      acks,
+		Balancer:          balancer,
+		TLSEnabled:        cfg.KafkaTLSEnabled,
 		TLSCA:             cfg.KafkaTLSCA,
 		TLSCert:           cfg.KafkaTLSCert,
 		TLSKey:            cfg.KafkaTLSKey,
 		TLSVersion:        uint16(tlsVersion),
 		ServerName:        cfg.KafkaServerName,
 		Insecure:          cfg.KafkaInsecure,
-		SASLMechanism:     cfg.KafkaSASLMechanism,
+		SASLMechanism:     mechanism,
 		Username:          cfg.KafkaUsername,
 		Password:          cfg.KafkaPassword,
 		IdleTimeout:       cfg.KafkaIdleTimeout,

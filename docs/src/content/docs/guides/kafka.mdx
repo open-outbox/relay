@@ -25,6 +25,26 @@ For more Kafka related configuration options please refer to
 ## Partitioning & Ordering
 
 The Relay maps the `partition_key` column from your database directly to the **Kafka Message Key**.
+Events without a partition key are spread across partitions.
+
+### Choosing a partitioner (`KAFKA_PARTITIONER`)
+
+The key is hashed to pick a partition, and Kafka clients don't all use the same hash. If another service
+produces the same keys to the same topics, set `KAFKA_PARTITIONER` to match its client so both send a given
+key to the same partition:
+
+| Other producers use | Set `KAFKA_PARTITIONER` to |
+| --- | --- |
+| Java client, Kafka Streams, Kafka Connect, ksqlDB, Flink | `murmur2` |
+| librdkafka (confluent-kafka-go, Python, .NET, Node) | `crc32` |
+| Sarama, or the Relay is the only producer | `fnv1a` (default) |
+
+<Aside type="caution" title="Changing the partitioner">
+Switching partitioners on a topic that already has data moves keys to different partitions. Events
+published before the switch stay in the old partition, so consumers may see a key's events out of order
+around the change. Switch on a new topic, or drain consumers first. Adding partitions to a topic has
+the same effect with any partitioner.
+</Aside>
 
 <Aside type="caution" title="Ordering Disclaimer">
 While the `partition_key` ensures that messages for the same entity are routed to the same Kafka partition,

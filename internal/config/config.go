@@ -207,6 +207,19 @@ type Config struct {
 	// 	Default: "snappy"
 	KafkaCompression string `mapstructure:"KAFKA_COMPRESSION"`
 
+	// KafkaPartitioner selects the hash used to map a partition key to a
+	// partition. Every producer writing the same keys to the same topic must
+	// use the same hash, or per-key ordering breaks.
+	//
+	// Supported values:
+	//   - "fnv1a":   FNV-1a, compatible with Sarama (relay default).
+	//   - "murmur2": compatible with the Java client, Kafka Streams and Connect.
+	//   - "crc32":   compatible with librdkafka (confluent-kafka-go, Python, .NET).
+	//
+	// Changing it on a live topic moves existing keys to different partitions.
+	//	Default: "fnv1a"
+	KafkaPartitioner string `mapstructure:"KAFKA_PARTITIONER"`
+
 	// KafkaRequiredAcks defines the number of brokers that must acknowledge a
 	// write before the relay considers the message successfully delivered.
 	//
@@ -220,6 +233,14 @@ type Config struct {
 	//	Note: In an Outbox Relay, "all" is the recommended setting to maintain
 	//	strict "At-Least-Once" delivery guarantees.
 	KafkaRequiredAcks string `mapstructure:"KAFKA_REQUIRED_ACKS"`
+
+	// KafkaTLSEnabled enables TLS for broker connections. Without a CA,
+	// the broker certificate is verified against the system trust store,
+	// which is what managed Kafka services with public certificates need.
+	// TLS is also enabled implicitly when KafkaTLSCA, KafkaTLSCert,
+	// KafkaTLSKey or KafkaInsecure is set.
+	//	Default: false
+	KafkaTLSEnabled bool `mapstructure:"KAFKA_TLS_ENABLED"`
 
 	// KafkaTLSCA can be a filesystem path to a Root CA certificate,
 	// a Base64 encoded string of the CA certificate, or the raw PEM data.
@@ -242,7 +263,7 @@ type Config struct {
 	// KafkaTLSVersion specifies the minimum TLS version required for the connection.
 	// Supported values: "1.0", "1.1", "1.2", "1.3"
 	//	Default: "1.2"
-	KafkaTLSVersion string `env:"KAFKA_TLS_VERSION" envDefault:"1.2"`
+	KafkaTLSVersion string `mapstructure:"KAFKA_TLS_VERSION"`
 
 	// KafkaServerName specifies the expected Server Name Indication (SNI)
 	// or hostname on the broker certificate. If empty, the broker's
@@ -348,8 +369,11 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_COMPRESSION", "snappy")
+	v.SetDefault("KAFKA_PARTITIONER", "fnv1a")
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
+	v.SetDefault("KAFKA_TLS_ENABLED", false)
+	v.SetDefault("KAFKA_TLS_VERSION", "1.2")
 	v.SetDefault("KAFKA_INSECURE", false)
 	v.SetDefault("KAFKA_IDLE_TIMEOUT", "30s")
 	v.SetDefault("KAFKA_KEEP_ALIVE", "30s")

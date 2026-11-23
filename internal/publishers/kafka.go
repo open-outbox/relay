@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
@@ -36,6 +38,8 @@ type KafkaConfig struct {
 	Async             bool
 	Compression       kafka.Compression
 	RequiredAcks      kafka.RequiredAcks
+	Balancer          kafka.Balancer
+	TLSEnabled        bool
 	TLSCA             string
 	TLSCert           string
 	TLSKey            string
@@ -58,11 +62,12 @@ type Kafka struct {
 	transport *kafka.Transport
 }
 
-// NewKafka initializes a new Kafka writer with strict ordering and safety.
-// It handles the parsing of broker URLs (stripping kafka:// prefixes)
-// and configures the underlying writer with a Hash balancer to ensure
-// messages with the same PartitionKey are always routed to the same
-// Kafka partition.
+// NewKafka builds the Kafka writer from cfg. It expects cfg.Brokers to hold
+// plain host:port addresses (URL parsing happens in the container), builds a
+// shared TLS/SASL transport for producing and pinging, and routes messages
+// with cfg.Balancer (kafka.Hash when nil) so messages with the same
+// PartitionKey always land on the same partition. No connection is opened
+// here; call Connect to verify reachability.
 func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
 	if len(cfg.Brokers) < 1 || (len(cfg.Brokers) == 1 && cfg.Brokers[0] == "") {
@@ -70,6 +75,8 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 			"kafka connection failed: no broker addresses provided in configuration",
 		)
 	}
+
+	cfg.SASLMechanism = strings.ToLower(strings.TrimSpace(cfg.SASLMechanism))
 
 	k := &Kafka{cfg: cfg}
 
@@ -80,9 +87,14 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 	k.dialer = dialer
 	k.transport = transport
 
+	balancer := cfg.Balancer
+	if balancer == nil {
+		balancer = &kafka.Hash{}
+	}
+
 	k.writer = &kafka.Writer{
 		Addr:         kafka.TCP(k.cfg.Brokers...),
-		Balancer:     &kafka.Hash{},
+		Balancer:     balancer,
 		RequiredAcks: cfg.RequiredAcks,
 		Async:        cfg.Async,
 		MaxAttempts:  cfg.MaxAttempts,
@@ -90,6 +102,8 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 		ReadTimeout:  cfg.ReadTimeout,
 		BatchSize:    cfg.BatchSize,
 		BatchBytes:   cfg.BatchBytes,
+		BatchTimeout: cfg.BatchTimeout,
+		Compression:  cfg.Compression,
 		Transport:    k.transport,
 	}
 
@@ -97,8 +111,9 @@ func NewKafka(cfg KafkaConfig) (*Kafka, error) {
 
 }
 
-// Connect satisfies the relay.Publisher interface.
-// It initializes the Kafka writer using the stored configuration.
+// Connect satisfies the relay.Publisher interface. The writer is created by
+// NewKafka and connects lazily, so Connect only verifies that at least one
+// broker is reachable (including the TLS and SASL handshakes).
 func (k *Kafka) Connect(ctx context.Context) error {
 	if err := k.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to establish broker connectivity: %w", err)
@@ -159,39 +174,67 @@ func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 }
 
 // Close gracefully shuts down the Kafka publisher.
-// It blocks until all buffered messages are flushed or the context expires.
-func (k *Kafka) Close(_ context.Context) error {
+// It blocks until all buffered messages are flushed or the context expires,
+// whichever comes first. If the context expires, Close returns its error and
+// any messages still buffered (async mode) may be lost; the flush keeps
+// running in the background until the writer's own timeouts end it.
+func (k *Kafka) Close(ctx context.Context) error {
 	if k == nil || k.writer == nil {
 		return nil // Safe to close if never connected
 	}
 
-	// k.writer.Close() returns an error if the flush fails or if
-	// the underlying connections cannot be closed cleanly.
-	if err := k.writer.Close(); err != nil {
-		return fmt.Errorf("failed to close kafka writer: %w", err)
-	}
-
-	return nil
+	return closeWithContext(ctx, func() error {
+		err := k.writer.Close()
+		// The writer only closes transports it created itself; ours is
+		// passed in explicitly, so release its pooled connections here.
+		if k.transport != nil {
+			k.transport.CloseIdleConnections()
+		}
+		return err
+	})
 }
 
-// Ping verifies the connectivity to the Kafka brokers by attempting to
-// fetch metadata or checking the underlying connection state.
+// closeWithContext runs closeFn and waits for it, giving up when ctx is done.
+// closeFn keeps running in the background after a timeout; the result
+// channel is buffered so that goroutine can always finish and exit.
+func closeWithContext(ctx context.Context, closeFn func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- closeFn() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("failed to close kafka writer: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf(
+			"kafka writer close did not finish before shutdown deadline: %w",
+			ctx.Err(),
+		)
+	}
+}
+
+// Ping verifies connectivity to the Kafka cluster. It dials each configured
+// broker in turn (performing the TLS and SASL handshakes when configured)
+// and succeeds as soon as one broker accepts the connection.
 func (k *Kafka) Ping(ctx context.Context) error {
+	errs := make([]error, 0, len(k.cfg.Brokers))
 
-	var addr string
-	if k.writer != nil {
-		addr = k.writer.Addr.String()
-	} else {
-		addr = k.cfg.Brokers[0]
+	for _, addr := range k.cfg.Brokers {
+		conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+
+		errs = append(errs, fmt.Errorf("broker %s: %w", addr, err))
+		if ctx.Err() != nil {
+			break
+		}
 	}
 
-	conn, err := k.dialer.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to dial kafka broker at %s: %w", addr, err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	return nil
+	return fmt.Errorf("failed to reach any kafka broker: %w", errors.Join(errs...))
 }
 
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
@@ -262,12 +305,21 @@ func isIndividualKafkaErrorRetryable(err error) bool {
 		return true
 	}
 
+	// Only errors caused by the message itself are permanent: retrying the
+	// same event can never succeed. Everything else (leader elections,
+	// metadata propagation, auth or ACL misconfiguration, broker outages)
+	// can resolve without the event changing, so it stays retryable.
+	//
+	// Note that UnknownTopicOrPartition and InvalidMessage (CORRUPT_MESSAGE)
+	// are deliberately absent: Kafka marks both as retriable, since they
+	// occur transiently during leader moves, topic auto-creation and
+	// in-transit corruption.
 	switch kErr {
 	case
-		kafka.InvalidMessage,
-		kafka.UnknownTopicOrPartition,
 		kafka.InvalidMessageSize,
 		kafka.MessageSizeTooLarge,
+		kafka.RecordListTooLarge,
+		kafka.InvalidRecord,
 		kafka.InvalidTopic:
 		return false
 	default:
@@ -317,8 +369,13 @@ func (k *Kafka) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 		return nil, nil, fmt.Errorf("failed to load TLS Key: %w", err)
 	}
 
+	// Supplying any TLS material, or asking to skip verification, implies TLS.
+	// TLSEnabled covers brokers with publicly trusted certificates, where none
+	// of those are needed: RootCAs stays nil and the system trust store is used.
+	tlsEnabled := k.cfg.TLSEnabled || ca != nil || cert != nil || key != nil || k.cfg.Insecure
+
 	var tlsConfig *tls.Config
-	if ca != nil || cert != nil || key != nil || k.cfg.Insecure {
+	if tlsEnabled {
 		tlsConfig = &tls.Config{
 			ServerName:         k.cfg.ServerName,
 			InsecureSkipVerify: k.cfg.Insecure,
@@ -365,9 +422,19 @@ func (k *Kafka) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 		dialer.SASLMechanism = mechanism
 	}
 
+	// The Transport is what the Writer uses to produce messages, so it needs
+	// its own dial, TLS and SASL settings; it does not inherit them from the
+	// Dialer above (which is only used by Ping).
+	netDialer := &net.Dialer{
+		Timeout:   k.cfg.ConnectionTimeout,
+		KeepAlive: k.cfg.KeepAlive,
+	}
+
 	transport := &kafka.Transport{
-		Dial:        dialer.DialFunc,
+		Dial:        netDialer.DialContext,
+		DialTimeout: k.cfg.ConnectionTimeout,
 		TLS:         tlsConfig,
+		SASL:        dialer.SASLMechanism,
 		IdleTimeout: k.cfg.IdleTimeout,
 	}
 

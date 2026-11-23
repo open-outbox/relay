@@ -4,7 +4,9 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -146,6 +148,14 @@ func setupRedis(t *testing.T) (*redis_go.Client, string) {
 
 func setupKafka(t *testing.T, topic string) string {
 	t.Helper()
+	broker, _ := setupKafkaContainer(t, topic)
+	return broker
+}
+
+// setupKafkaContainer is like setupKafka but also returns the container so
+// tests can stop the broker to simulate an outage.
+func setupKafkaContainer(t *testing.T, topic string) (string, *kafka.KafkaContainer) {
+	t.Helper()
 	ctx := context.Background()
 
 	// The official module handles the "Advertised Listener" logic for you
@@ -164,7 +174,7 @@ func setupKafka(t *testing.T, topic string) string {
 	// Create topic
 	createKafkaTopic(t, broker, topic)
 
-	return broker
+	return broker, kafkaContainer
 }
 
 func createKafkaTopic(t *testing.T, broker string, topic string) {
@@ -216,4 +226,16 @@ func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tab
 	if err != nil {
 		panic(fmt.Sprintf("failed to seed postgres: %v", err))
 	}
+}
+
+// oversizedKafkaPayload returns a JSON payload larger than the broker's
+// default 1MB message.max.bytes. Random bytes don't compress, so the record
+// stays oversized even with snappy enabled. Publishing it fails with the
+// non-retryable MessageSizeTooLarge error.
+func oversizedKafkaPayload(t *testing.T) string {
+	t.Helper()
+	raw := make([]byte, 3<<20)
+	_, err := rand.Read(raw)
+	require.NoError(t, err)
+	return fmt.Sprintf(`{"data":%q}`, base64.StdEncoding.EncodeToString(raw))
 }
