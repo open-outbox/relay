@@ -3,6 +3,12 @@
 All notable changes to the **Open Outbox Relay** will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-11-24
+
+### 🛡️ Fixed
+
+- **Documentation:** Removed `synchronous_commit = off` from the PostgreSQL tuning parameters on the benchmarks page.
+
 ## [1.3.0] - 2026-11-23
 
 ### ✨ Added
