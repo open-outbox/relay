@@ -37,7 +37,6 @@ The following parameters were applied to `postgresql.conf` to achieve the **20K+
 | `shared_buffers` | **4GB** | Allocated 12.5% of total RAM for data caching. |
 | `work_mem` | **64MB** | Increased memory for internal sort operations. |
 | `maintenance_work_mem` | **512MB** | Accelerated index maintenance and vacuuming. |
-| `synchronous_commit` | **off** | Decoupled transaction success from disk flush (**Async Logging**). |
 | `checkpoint_timeout` | **15min** | Reduced the frequency of heavy disk flushes. |
 | `max_wal_size` | **4GB** | Expanded the WAL ceiling to prevent frequent checkpoints. |
 | `random_page_cost` | **1.1** | Optimized for NVMe seek speeds. |
