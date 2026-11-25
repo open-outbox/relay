@@ -66,14 +66,18 @@ func TestKafkaTLS(t *testing.T) {
 		})
 
 		// Without any TLS setting the relay speaks plaintext, which a TLS
-		// listener cannot accept.
+		// listener cannot accept. The TCP connect succeeds, so only Ping's
+		// metadata round trip can tell; the engine must then never start
+		// publishing, so no attempts are spent on a misconfiguration.
 		t.Run("Plaintext_AgainstTLSListener_Fails", func(t *testing.T) {
 			setKafkaRelayEnv(t, pgConnStr, broker)
 			setFailFastKafkaEnv(t)
 
-			eventID := insertKafkaEvent(t, db, "tls.ca.v1")
-			ctx := startKafkaEngineFor(t, 20*time.Second)
-			assertPublishFailedAndRetried(ctx, t, db, eventID)
+			assertPublisherPing(t, func(t *testing.T, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "metadata request failed")
+			})
+			assertEngineHoldsEvent(t, db, "tls.ca.v1")
 		})
 	})
 
@@ -91,17 +95,20 @@ func TestKafkaTLS(t *testing.T) {
 		})
 
 		// The broker rejects the connection when no client certificate is
-		// presented. With TLS 1.3 that rejection only surfaces after the
-		// handshake, so it is asserted through a real publish attempt: the
-		// event must stay undelivered and be scheduled for retry.
-		t.Run("MissingClientCert_PublishFails", func(t *testing.T) {
+		// presented. With TLS 1.3 that rejection only surfaces on the first
+		// read after the handshake, so a bare dial would pass; Ping's
+		// metadata round trip must catch it before the engine publishes.
+		t.Run("MissingClientCert_PingFails", func(t *testing.T) {
 			setKafkaRelayEnv(t, pgConnStr, broker)
 			setFailFastKafkaEnv(t)
 			t.Setenv("KAFKA_TLS_CA", "file://"+certs.CAFile)
 
-			eventID := insertKafkaEvent(t, db, "mtls.v1")
-			ctx := startKafkaEngineFor(t, 30*time.Second)
-			assertPublishFailedAndRetried(ctx, t, db, eventID)
+			assertPublisherPing(t, func(t *testing.T, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "metadata request failed")
+				assert.Contains(t, err.Error(), "tls:")
+			})
+			assertEngineHoldsEvent(t, db, "mtls.v1")
 		})
 	})
 }
@@ -194,32 +201,22 @@ func assertDeliveredOverTLS(
 	}, 10*time.Second, 200*time.Millisecond, "event should be marked DELIVERED")
 }
 
-// assertPublishFailedAndRetried expects the event's publish to fail with a
-// retryable error: it goes back to PENDING with one recorded attempt.
-func assertPublishFailedAndRetried(
-	ctx context.Context,
-	t *testing.T,
-	db *sql.DB,
-	eventID uuid.UUID,
-) {
+// assertEngineHoldsEvent starts the engine against a broker that Ping
+// rejects and checks that the event is left untouched: still PENDING, with
+// no attempt spent, because the engine never gets past connecting.
+func assertEngineHoldsEvent(t *testing.T, db *sql.DB, topic string) {
 	t.Helper()
-	var (
-		status    string
-		attempts  int
-		lastError *string
-	)
-	require.Eventually(t, func() bool {
-		if ctx.Err() != nil {
-			return false
-		}
-		err := db.QueryRow(
-			"SELECT status, attempts, last_error FROM openoutbox_events WHERE event_id = $1",
-			eventID,
-		).Scan(&status, &attempts, &lastError)
-		return err == nil && attempts > 0 && status != "DELIVERING"
-	}, 25*time.Second, 200*time.Millisecond, "engine should record the failed publish")
+	eventID := insertKafkaEvent(t, db, topic)
+	ctx := startKafkaEngineFor(t, 8*time.Second)
+	<-ctx.Done()
 
-	assert.Equal(t, "PENDING", status, "TLS failures are retryable and must not kill the event")
-	require.NotNil(t, lastError)
-	t.Logf("recorded publish error: %s", *lastError)
+	var (
+		status   string
+		attempts int
+	)
+	require.NoError(t, db.QueryRow(
+		"SELECT status, attempts FROM openoutbox_events WHERE event_id = $1", eventID,
+	).Scan(&status, &attempts))
+	assert.Equal(t, "PENDING", status, "event must not be claimed while the broker is unusable")
+	assert.Equal(t, 0, attempts, "a misconfiguration must not spend delivery attempts")
 }
