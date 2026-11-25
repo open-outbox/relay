@@ -23,3 +23,13 @@ func lookupOption[T any](name, value string, options map[string]T) (T, error) {
 		name, value, strings.Join(supported, ", "),
 	)
 }
+
+func splitAndTrim(list string) []string {
+	var items []string
+	for _, item := range strings.Split(list, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
+}

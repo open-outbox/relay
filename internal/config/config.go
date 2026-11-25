@@ -285,8 +285,8 @@ type Config struct {
 	KafkaInsecure bool `mapstructure:"KAFKA_INSECURE"`
 
 	// KafkaSASLMechanism specifies the authentication protocol to use
-	// if SASL is required (e.g., "plain", "scram-sha-256", "scram-sha-512").
-	// If empty, SASL authentication is disabled.
+	// if SASL is required ("plain", "scram-sha-256", "scram-sha-512" or
+	// "oauthbearer"). If empty, SASL authentication is disabled.
 	//	Default: ""
 	KafkaSASLMechanism string `mapstructure:"KAFKA_SASL_MECHANISM"`
 
@@ -297,6 +297,29 @@ type Config struct {
 	// KafkaPassword is the SASL password used for authentication.
 	//	Default: ""
 	KafkaPassword string `mapstructure:"KAFKA_PASSWORD"`
+
+	// KafkaOAuthTokenURL is the OAuth 2.0 token endpoint used by the
+	// "oauthbearer" mechanism (client credentials grant).
+	//	Default: ""
+	KafkaOAuthTokenURL string `mapstructure:"KAFKA_OAUTH_TOKEN_URL"`
+
+	// KafkaOAuthClientID is the OAuth 2.0 client ID.
+	//	Default: ""
+	KafkaOAuthClientID string `mapstructure:"KAFKA_OAUTH_CLIENT_ID"`
+
+	// KafkaOAuthClientSecret is the OAuth 2.0 client secret.
+	//	Default: ""
+	KafkaOAuthClientSecret string `mapstructure:"KAFKA_OAUTH_CLIENT_SECRET"`
+
+	// KafkaOAuthScopes is a comma-separated list of scopes to request.
+	//	Default: ""
+	KafkaOAuthScopes string `mapstructure:"KAFKA_OAUTH_SCOPES"`
+
+	// KafkaOAuthExtensions is a comma-separated list of key=value SASL
+	// extensions sent with the token (e.g. Confluent Cloud's
+	// "logicalCluster=lkc-xxx,identityPoolId=pool-xxx").
+	//	Default: ""
+	KafkaOAuthExtensions string `mapstructure:"KAFKA_OAUTH_EXTENSIONS"`
 
 	// KafkaIdleTimeout is the maximum amount of time an idle connection
 	// will remain open before being closed by the transport layer.

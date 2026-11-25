@@ -99,6 +99,47 @@ KAFKA_ASYNC=false
 KAFKA_BATCH_SIZE=1
 ```
 
+## Authentication
+
+Set [`KAFKA_SASL_MECHANISM`](/reference/configuration#kafka_sasl_mechanism) to authenticate with the
+brokers. Combine it with the TLS settings when the listener uses `SASL_SSL`.
+
+<Tabs>
+<TabItem label="SCRAM / PLAIN">
+```bash
+KAFKA_SASL_MECHANISM=scram-sha-512   # or scram-sha-256, plain
+KAFKA_USERNAME=relay
+KAFKA_PASSWORD=secret
+KAFKA_TLS_ENABLED=true
+```
+</TabItem>
+<TabItem label="OAUTHBEARER">
+The Relay fetches tokens from your identity provider with the OAuth 2.0 client credentials grant and
+caches each one until shortly before it expires.
+
+```bash
+KAFKA_SASL_MECHANISM=oauthbearer
+KAFKA_OAUTH_TOKEN_URL=https://idp.example.com/oauth2/token
+KAFKA_OAUTH_CLIENT_ID=relay
+KAFKA_OAUTH_CLIENT_SECRET=secret
+KAFKA_OAUTH_SCOPES=kafka
+KAFKA_TLS_ENABLED=true
+```
+
+On Confluent Cloud, also set the cluster and identity pool:
+
+```bash
+KAFKA_OAUTH_EXTENSIONS=logicalCluster=lkc-abc123,identityPoolId=pool-xyz
+```
+</TabItem>
+</Tabs>
+
+The Relay authenticates each new connection and does not re-authenticate open ones. If brokers set
+`connections.max.reauth.ms`, they close a connection when its token expires, and the
+Relay reconnects with a fresh one.
+
+---
+
 ## Connection Management
 
 ### Topic Provisioning

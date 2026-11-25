@@ -565,7 +565,14 @@ Controls whether the client skips verifying the broker's certificate chain and h
 
 **Default:** `""`
 
-The SASL authentication mechanism used to connect to the brokers. Supported values are `"plain"`, `"scram-sha-256"`, and `"scram-sha-512"`. Leave empty for unauthenticated connections.
+The SASL authentication mechanism used to connect to the brokers. Leave empty for unauthenticated connections.
+
+| Value | Credentials |
+| --- | --- |
+| `plain`, `scram-sha-256`, `scram-sha-512` | [`KAFKA_USERNAME`](#kafka_username) and [`KAFKA_PASSWORD`](#kafka_password) |
+| `oauthbearer` | An OAuth 2.0 client: [`KAFKA_OAUTH_TOKEN_URL`](#kafka_oauth_token_url), [`KAFKA_OAUTH_CLIENT_ID`](#kafka_oauth_client_id), [`KAFKA_OAUTH_CLIENT_SECRET`](#kafka_oauth_client_secret) |
+
+See [Authentication](/guides/kafka/#authentication) in the Kafka guide for examples.
 
 ---
 
@@ -575,7 +582,7 @@ The SASL authentication mechanism used to connect to the brokers. Supported valu
 
 **Default:** `""`
 
-The username credential used for SASL authentication. Required if `KAFKA_SASL_MECHANISM` is set.
+The username used for SASL authentication. Required when `KAFKA_SASL_MECHANISM` is `plain`, `scram-sha-256` or `scram-sha-512`.
 
 ---
 
@@ -585,7 +592,57 @@ The username credential used for SASL authentication. Required if `KAFKA_SASL_ME
 
 **Default:** `""`
 
-The password credential used for SASL authentication. Required if `KAFKA_SASL_MECHANISM` is set.
+The password used for SASL authentication. Required when `KAFKA_SASL_MECHANISM` is `plain`, `scram-sha-256` or `scram-sha-512`.
+
+---
+
+### `KAFKA_OAUTH_TOKEN_URL`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The OAuth 2.0 token endpoint of your identity provider. The Relay requests tokens from it with the client credentials grant. Required when `KAFKA_SASL_MECHANISM` is `oauthbearer`.
+
+---
+
+### `KAFKA_OAUTH_CLIENT_ID`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The OAuth 2.0 client ID. Required when `KAFKA_SASL_MECHANISM` is `oauthbearer`.
+
+---
+
+### `KAFKA_OAUTH_CLIENT_SECRET`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+The OAuth 2.0 client secret.
+
+---
+
+### `KAFKA_OAUTH_SCOPES`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+A comma-separated list of scopes to request with each token.
+
+---
+
+### `KAFKA_OAUTH_EXTENSIONS`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""`
+
+A comma-separated list of `key=value` SASL extensions sent to the broker with the token. Keys may contain only letters. Confluent Cloud needs `logicalCluster` and `identityPoolId`, for example `logicalCluster=lkc-abc123,identityPoolId=pool-xyz`.
 
 ---
 

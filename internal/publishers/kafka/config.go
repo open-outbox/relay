@@ -36,6 +36,11 @@ type Config struct {
 	SASLMechanism     string
 	Username          string
 	Password          string
+	OAuthTokenURL     string
+	OAuthClientID     string
+	OAuthClientSecret string
+	OAuthScopes       []string
+	OAuthExtensions   map[string]string
 	IdleTimeout       time.Duration
 	KeepAlive         time.Duration
 }

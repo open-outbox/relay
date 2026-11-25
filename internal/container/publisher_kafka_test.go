@@ -147,3 +147,42 @@ func TestBuildKafkaPublisher_RejectsUnknownOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestParseKafkaOAuthExtensions(t *testing.T) {
+	got, err := parseKafkaOAuthExtensions(" logicalCluster=lkc-1 , identityPoolId=pool-2,")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"logicalCluster": "lkc-1", "identityPoolId": "pool-2"}, got)
+
+	got, err = parseKafkaOAuthExtensions("")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	for _, in := range []string{"logicalCluster", "=lkc-1"} {
+		_, err := parseKafkaOAuthExtensions(in)
+		require.Error(t, err, in)
+		assert.Contains(t, err.Error(), "expected key=value")
+	}
+}
+
+func TestBuildKafkaPublisher_OAuthBearer(t *testing.T) {
+	cfg := config.Config{
+		PublisherURL:           "kafka://localhost:9092",
+		KafkaCompression:       "none",
+		KafkaRequiredAcks:      "all",
+		KafkaSASLMechanism:     "OAUTHBEARER",
+		KafkaOAuthTokenURL:     "https://idp.example/token",
+		KafkaOAuthClientID:     "relay",
+		KafkaOAuthClientSecret: "secret",
+		KafkaOAuthScopes:       "kafka, produce",
+		KafkaOAuthExtensions:   "logicalCluster=lkc-1",
+	}
+
+	p, err := buildKafkaPublisher(cfg)
+	require.NoError(t, err)
+	require.IsType(t, &kafkapub.Publisher{}, p)
+
+	cfg.KafkaOAuthExtensions = "logicalCluster"
+	_, err = buildKafkaPublisher(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "KAFKA_OAUTH_EXTENSIONS")
+}
