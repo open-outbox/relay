@@ -13,5 +13,6 @@ func TestMain(m *testing.M) {
 	sharedKafka.stop()
 	sharedConsul.stop()
 	sharedNats.stop()
+	sharedRedis.stop()
 	os.Exit(code)
 }

@@ -28,7 +28,9 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
 	// Seed the Database
 	eventID := uuid.New()
 	payload := []byte(`{"order_id": 123, "status": "paid"}`)
-	eventType := "openoutbox.events.v1"
+	// The server is shared, so the stream is this test's own.
+	eventType := "relay-tests.happy.v1"
+	t.Cleanup(func() { _ = r.Del(context.Background(), eventType).Err() })
 
 	_, err := db.ExecContext(ctx, `
         INSERT INTO openoutbox_events (
@@ -163,8 +165,9 @@ func TestRedis_WrongTypeKey_MarksEventDead(t *testing.T) {
 
 	setRedisRelayEnv(t, pgConnStr, redisUrl)
 
-	const key = "orders.not.a.stream"
+	const key = "relay-tests.wrongtype"
 	require.NoError(t, r.Set(ctx, key, "plain value", 0).Err())
+	t.Cleanup(func() { _ = r.Del(context.Background(), key).Err() })
 
 	eventID := uuid.New()
 	_, err := db.ExecContext(ctx, `

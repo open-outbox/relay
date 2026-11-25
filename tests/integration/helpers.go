@@ -118,15 +118,17 @@ func setupNats(t *testing.T) (*nats_go.Conn, string) {
 	return nc, url
 }
 
+// setupRedis returns a client connected to the shared Redis server, and its
+// URL. Tests share the server, so each uses its own keys.
 func setupRedis(t *testing.T) (*redis_go.Client, string) {
 	t.Helper()
-	client, url, _ := setupRedisContainer(t)
-	return client, url
+	url := sharedRedis.get(t)
+	return newRedisClient(t, url), url
 }
 
-// setupRedisContainer is like setupRedis but also returns the container, so
-// tests can stop Redis to simulate an outage. The container is removed when
-// the test ends.
+// setupRedisContainer starts a Redis of the test's own and also returns the
+// container, so tests can stop Redis to simulate an outage. The container is
+// removed when the test ends.
 func setupRedisContainer(t *testing.T) (*redis_go.Client, string, *redis.RedisContainer) {
 	t.Helper()
 	ctx := context.Background()
@@ -141,16 +143,20 @@ func setupRedisContainer(t *testing.T) (*redis_go.Client, string, *redis.RedisCo
 
 	endpoint, err := redisContainer.Endpoint(ctx, "")
 	require.NoError(t, err)
-	redisURL := "redis://" + endpoint
+	url := "redis://" + endpoint
 
-	opts, err := redis_go.ParseURL(redisURL)
+	return newRedisClient(t, url), url, redisContainer
+}
+
+func newRedisClient(t *testing.T, url string) *redis_go.Client {
+	t.Helper()
+	opts, err := redis_go.ParseURL(url)
 	require.NoError(t, err)
+
 	client := redis_go.NewClient(opts)
 	t.Cleanup(func() { _ = client.Close() })
-
-	require.NoError(t, client.Ping(ctx).Err())
-
-	return client, redisURL, redisContainer
+	require.NoError(t, client.Ping(context.Background()).Err())
+	return client
 }
 
 func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tableName string) {

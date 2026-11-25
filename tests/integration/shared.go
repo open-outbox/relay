@@ -19,6 +19,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/testcontainers/testcontainers-go/modules/nats"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/modules/redis"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
@@ -42,6 +43,7 @@ var (
 	sharedKafka    = &shared[string]{start: startKafkaBroker}
 	sharedConsul   = &shared[string]{start: startConsul}
 	sharedNats     = &shared[string]{start: startNats}
+	sharedRedis    = &shared[string]{start: startRedis}
 )
 
 type shared[T any] struct {
@@ -153,4 +155,13 @@ func startNats(ctx context.Context) (string, testcontainers.Container, error) {
 	}
 	url, err := c.ConnectionString(ctx)
 	return url, c, err
+}
+
+func startRedis(ctx context.Context) (string, testcontainers.Container, error) {
+	c, err := redis.Run(ctx, redisImage)
+	if err != nil {
+		return "", c, err
+	}
+	endpoint, err := c.Endpoint(ctx, "")
+	return "redis://" + endpoint, c, err
 }
