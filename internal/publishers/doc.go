@@ -1,10 +1,12 @@
 // Package publishers provides concrete implementations for various message
 // delivery backends.
 //
-// including:
-//   - Kafka: For publishing messages to Apache Kafka topics.
-//   - Nats: For publishing messages to NATS JetStream streams.
-//   - Redis: For publishing messages to Redis Streams.
+// The broker publishers live in sub-packages:
+//   - kafka: For publishing messages to Apache Kafka topics.
+//   - nats: For publishing messages to NATS JetStream streams.
+//   - redis: For publishing messages to Redis Streams.
+//
+// This package holds the ones with no external dependencies:
 //   - Stdout: A basic publisher for logging events to standard output, useful for debugging.
 //   - Null: A no-op publisher, primarily used for performance benchmarking the relay engine
 //     without external system latency.

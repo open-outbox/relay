@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/open-outbox/relay/internal/config"
-	"github.com/open-outbox/relay/internal/publishers"
+	kafkapub "github.com/open-outbox/relay/internal/publishers/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +46,7 @@ func TestBuildKafkaPublisher_Config(t *testing.T) {
 
 			p, err := buildKafkaPublisher(cfg)
 			require.NoError(t, err)
-			require.IsType(t, &publishers.Kafka{}, p)
+			require.IsType(t, &kafkapub.Publisher{}, p)
 		})
 	}
 }
@@ -65,7 +65,7 @@ func TestBuildKafkaPublisher_Partitioner(t *testing.T) {
 
 			p, err := buildKafkaPublisher(cfg)
 			require.NoError(t, err)
-			require.IsType(t, &publishers.Kafka{}, p)
+			require.IsType(t, &kafkapub.Publisher{}, p)
 		})
 	}
 

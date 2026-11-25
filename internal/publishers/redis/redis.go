@@ -1,4 +1,5 @@
-package publishers
+// Package redis publishes relay events to Redis Streams.
+package redis
 
 import (
 	"context"
@@ -14,22 +15,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Redis is a publisher that pushes events into Redis Streams using the XADD command.
+// Publisher is a publisher that pushes events into Redis Streams using the XADD command.
 // It implements the relay.Publisher interface.
-type Redis struct {
+type Publisher struct {
 	url               string
 	writeTimeout      time.Duration
 	connectionTimeout time.Duration
 	client            *redis.Client
 }
 
-// NewRedis establishes a connection to a Redis server.
+// New establishes a connection to a Redis server.
 // It validates the connection with a Ping before returning.
 // It accepts redis URLs like "redis://<user>:<pass>@localhost:6379/0" .
-func NewRedis(
+func New(
 	url string,
 	writeTimeout, connectionTimeout time.Duration,
-) (*Redis, error) {
+) (*Publisher, error) {
 
 	if url == "" {
 		return nil, errors.New("redis url is required")
@@ -40,7 +41,7 @@ func NewRedis(
 		return nil, fmt.Errorf("invalid redis url: %w", err)
 	}
 
-	return &Redis{
+	return &Publisher{
 		url:               url,
 		writeTimeout:      writeTimeout,
 		connectionTimeout: connectionTimeout,
@@ -49,7 +50,7 @@ func NewRedis(
 
 // Connect establishes the connection to the Redis server.
 // It parses the URL, configures the client, and verifies connectivity with a Ping.
-func (r *Redis) Connect(ctx context.Context) error {
+func (r *Publisher) Connect(ctx context.Context) error {
 	if r.client != nil {
 		return nil
 	}
@@ -80,7 +81,7 @@ func (r *Redis) Connect(ctx context.Context) error {
 //
 // If publishing fails, it classifies the error as retryable if it indicates
 // a transient issue like network disruption or a cluster resharding event.
-func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
+func (r *Publisher) Publish(ctx context.Context, event relay.Event) error {
 	values := map[string]interface{}{
 		"id":      event.ID.String(),
 		"payload": event.Payload,
@@ -125,7 +126,7 @@ func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
 // It handles connection issues, pool timeouts, and server-side states (OOM, Loading, ReadOnly).
 // It also specifically handles Redis Cluster redirection errors (MOVED, ASK) which are
 // considered retryable as the client will automatically update its slot map.
-func (r *Redis) isRedisErrorRetryable(err error) bool {
+func (r *Publisher) isRedisErrorRetryable(err error) bool {
 
 	if err == nil {
 		return false
@@ -173,7 +174,7 @@ func (r *Redis) isRedisErrorRetryable(err error) bool {
 }
 
 // Close gracefully shuts down the Redis client and its underlying connection pool.
-func (r *Redis) Close(_ context.Context) error {
+func (r *Publisher) Close(_ context.Context) error {
 	if r.client == nil {
 		return nil
 	}
@@ -190,7 +191,7 @@ func (r *Redis) Close(_ context.Context) error {
 // Ping verifies the connectivity to the Redis server. It ensures the
 // client can communicate with the storage backend and that the
 // connection pool is healthy.
-func (r *Redis) Ping(ctx context.Context) error {
+func (r *Publisher) Ping(ctx context.Context) error {
 	if r.client == nil {
 		return fmt.Errorf("redis client not initialized")
 	}

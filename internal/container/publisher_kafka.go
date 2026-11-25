@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/open-outbox/relay/internal/config"
-	"github.com/open-outbox/relay/internal/publishers"
+	kafkapub "github.com/open-outbox/relay/internal/publishers/kafka"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/compress"
@@ -84,7 +84,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, err
 	}
 
-	return publishers.NewKafka(publishers.KafkaConfig{
+	return kafkapub.New(kafkapub.Config{
 		Brokers:           brokers,
 		MaxAttempts:       cfg.KafkaMaxAttempts,
 		WriteTimeout:      cfg.KafkaWriteTimeout,
