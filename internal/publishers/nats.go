@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/open-outbox/relay/internal/relay"
+	"github.com/open-outbox/relay/internal/utils"
 )
 
 // Nats is a JetStream-powered publisher for At-Least-Once delivery.
@@ -157,7 +158,7 @@ func isNatsErrorRetryable(err error) bool {
 		return false
 	}
 
-	if isContextError(err) {
+	if utils.IsContextErr(err) {
 		return true
 	}
 
