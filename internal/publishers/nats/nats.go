@@ -1,4 +1,5 @@
-package publishers
+// Package nats publishes relay events to NATS JetStream subjects.
+package nats
 
 import (
 	"context"
@@ -13,10 +14,10 @@ import (
 	"github.com/open-outbox/relay/internal/utils"
 )
 
-// Nats is a JetStream-powered publisher for At-Least-Once delivery.
+// Publisher is a JetStream-powered publisher for At-Least-Once delivery.
 // It implements the relay.Publisher interface by publishing messages to NATS subjects
 // that are backed by a JetStream stream for durability.
-type Nats struct {
+type Publisher struct {
 	url               string
 	conn              *nats.Conn
 	js                nats.JetStreamContext
@@ -24,16 +25,16 @@ type Nats struct {
 	publishTimeout    time.Duration
 }
 
-// NewNats establishes a connection to a NATS server and initializes a JetStream context.
+// New establishes a connection to a NATS server and initializes a JetStream context.
 // It sets a client name "Open-Outbox-Relay" on the connection to facilitate easier
 // identification in NATS monitoring tools.
-func NewNats(url string, publishTimeout, connectionTimeout time.Duration) (*Nats, error) {
+func New(url string, publishTimeout, connectionTimeout time.Duration) (*Publisher, error) {
 
 	if url == "" {
 		return nil, errors.New("nats url is required")
 	}
 
-	return &Nats{
+	return &Publisher{
 		url:               url,
 		publishTimeout:    publishTimeout,
 		connectionTimeout: connectionTimeout,
@@ -41,7 +42,7 @@ func NewNats(url string, publishTimeout, connectionTimeout time.Duration) (*Nats
 }
 
 // Connect establishes the connection to the NATS server.
-func (n *Nats) Connect(_ context.Context) error {
+func (n *Publisher) Connect(_ context.Context) error {
 	if n.conn != nil && n.conn.IsConnected() {
 		return nil
 	}
@@ -72,7 +73,7 @@ func (n *Nats) Connect(_ context.Context) error {
 //
 // If the connection is closed or the publish fails, it returns a relay.PublishError,
 // classifying the failure as retryable based on NATS-specific error codes.
-func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
+func (n *Publisher) Publish(ctx context.Context, event relay.Event) error {
 	if n.conn.IsClosed() {
 		return &relay.PublishError{
 			Err:         errors.New("nats: connection closed permanently"),
@@ -123,7 +124,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 }
 
 // Close gracefully shuts down the NATS connection.
-func (n *Nats) Close(_ context.Context) error {
+func (n *Publisher) Close(_ context.Context) error {
 	if n.conn != nil {
 		n.conn.Close()
 	}
@@ -133,7 +134,7 @@ func (n *Nats) Close(_ context.Context) error {
 // Ping verifies the connectivity to the NATS server. It checks if the
 // underlying connection is active and capable of communicating with
 // the NATS cluster.
-func (n *Nats) Ping(_ context.Context) error {
+func (n *Publisher) Ping(_ context.Context) error {
 	if n.conn == nil || !n.conn.IsConnected() {
 		return fmt.Errorf("nats connection is not active")
 	}
