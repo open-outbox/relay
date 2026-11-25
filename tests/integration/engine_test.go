@@ -246,7 +246,7 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	// 1. CONFIG
 	t.Setenv("RELAY_ID", newWorkerID)
 	t.Setenv("LEASE_TIMEOUT", "5s")
-	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("POLL_INTERVAL", "20ms")
 	t.Setenv("STORAGE_URL", pgConnStr)
 	t.Setenv("OTEL_TRACES_EXPORTER", "none")
 	t.Setenv("OTEL_METRICS_EXPORTER", "none")
@@ -293,7 +293,7 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 
 		// We caught it! The new worker has the lock and hasn't failed yet.
 		return status == "DEAD" && lockedBy == nil
-	}, 7*time.Second, 100*time.Millisecond)
+	}, 7*time.Second, 50*time.Millisecond)
 
 	// THE ZOMBIE ATTACK
 	// Now, the OLD worker (slow-worker-99) finally finishes its "slow" publish.

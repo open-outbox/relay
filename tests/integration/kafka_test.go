@@ -70,7 +70,7 @@ func TestKafkaHappyPath(t *testing.T) {
 		db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", eventID).
 			Scan(&status)
 		return status == "DELIVERED"
-	}, 5*time.Second, 200*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 }
 
 // An unknown topic is a retryable error: Kafka returns it transiently during
@@ -111,7 +111,7 @@ func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &availableAt, &lastError)
 		return err == nil && attempts == 1
-	}, 20*time.Second, 200*time.Millisecond, "event with unknown topic should be attempted once")
+	}, 20*time.Second, 50*time.Millisecond, "event with unknown topic should be attempted once")
 
 	assert.Equal(t, "PENDING", status, "unknown topic must be retried, not killed")
 	assert.True(t, availableAt.After(insertedAt), "retry must be scheduled in the future")
@@ -152,7 +152,7 @@ func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &lastError)
 		return err == nil && status == "DEAD"
-	}, 20*time.Second, 200*time.Millisecond, "oversized event should be marked DEAD")
+	}, 20*time.Second, 50*time.Millisecond, "oversized event should be marked DEAD")
 
 	assert.Equal(t, 1, attempts, "non-retryable errors must not be retried")
 	require.NotNil(t, lastError)
@@ -195,7 +195,7 @@ func TestKafka_BrokerUnavailable_SchedulesRetry(t *testing.T) {
 		err := db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", warmupID).
 			Scan(&status)
 		return err == nil && status == "DELIVERED"
-	}, 20*time.Second, 200*time.Millisecond, "warm-up event should be delivered")
+	}, 20*time.Second, 50*time.Millisecond, "warm-up event should be delivered")
 
 	stopTimeout := 5 * time.Second
 	require.NoError(t, kafkaContainer.Stop(ctx, &stopTimeout))
@@ -221,7 +221,7 @@ func TestKafka_BrokerUnavailable_SchedulesRetry(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &availableAt, &lastError)
 		return err == nil && attempts > 0 && status != "DELIVERING"
-	}, 30*time.Second, 200*time.Millisecond, "engine should record the failed publish")
+	}, 30*time.Second, 50*time.Millisecond, "engine should record the failed publish")
 
 	assert.Equal(t, "PENDING", status, "retryable failures must not kill the event")
 	assert.Equal(t, 1, attempts)

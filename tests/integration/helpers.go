@@ -94,7 +94,7 @@ func setRelayEnv(t *testing.T, pgConnStr, publisherType, publisherURL string) {
 	t.Setenv("STORAGE_URL", pgConnStr)
 	t.Setenv("PUBLISHER_TYPE", publisherType)
 	t.Setenv("PUBLISHER_URL", publisherURL)
-	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("POLL_INTERVAL", "20ms")
 	t.Setenv("OTEL_TRACES_EXPORTER", "none")
 	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 }
@@ -107,7 +107,6 @@ func setNatsRelayEnv(t *testing.T, pgConnStr, natsURL string) {
 func setRedisRelayEnv(t *testing.T, pgConnStr, redisURL string) {
 	t.Helper()
 	setRelayEnv(t, pgConnStr, "redis", redisURL)
-	t.Setenv("POLL_INTERVAL", "20ms")
 }
 
 func setupNats(t *testing.T) (*nats_go.Conn, string) {

@@ -167,7 +167,7 @@ func assertDelivered(
 		err := db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", eventID).
 			Scan(&status)
 		return err == nil && status == "DELIVERED"
-	}, 10*time.Second, 200*time.Millisecond, "event should be marked DELIVERED")
+	}, 10*time.Second, 50*time.Millisecond, "event should be marked DELIVERED")
 }
 
 // assertEngineHoldsEvent starts the engine against a broker that Ping
@@ -175,8 +175,12 @@ func assertDelivered(
 // no attempt spent, because the engine never gets past connecting.
 func assertEngineHoldsEvent(t *testing.T, db *sql.DB, topic string) {
 	t.Helper()
+	// Retry connecting every second, so the window sees several failed
+	// connects rather than one or two at the default 5s interval.
+	t.Setenv("PUBLISHER_CONNECT_RETRY_INTERVAL", "1s")
+
 	eventID := insertKafkaEvent(t, db, topic)
-	ctx := startKafkaEngineFor(t, 8*time.Second)
+	ctx := startKafkaEngineFor(t, 4*time.Second)
 	<-ctx.Done()
 
 	var (

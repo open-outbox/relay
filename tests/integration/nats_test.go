@@ -86,7 +86,7 @@ func TestNatsHappyPath(t *testing.T) {
 		err := db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", eventID).
 			Scan(&status)
 		return err == nil && status == "DELIVERED"
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 2*time.Second, 50*time.Millisecond)
 }
 
 func TestNats_PublisherErrorHandling(t *testing.T) {
@@ -127,5 +127,5 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 
 		// We want to see attempts > 0 and status still PENDING (or DELIVERING)
 		return err == nil && attempts > 0 && status != "DELIVERED"
-	}, 5*time.Second, 200*time.Millisecond, "Engine should record failure when NATS reject publish")
+	}, 5*time.Second, 50*time.Millisecond, "Engine should record failure when NATS reject publish")
 }
