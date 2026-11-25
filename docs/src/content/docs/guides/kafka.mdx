@@ -123,10 +123,18 @@ Configuration errors such as plaintext against a TLS listener, a missing client 
 SASL credentials are caught by the same check, so no delivery attempts are spent on them.
 
 ### Timeouts and Retries
-In synchronous mode (`KAFKA_ASYNC=false`), a network hiccup can stall the Relay. Use the following to
-prevent "zombie" locks in your database:
+Failed publishes are retried at two levels:
 
-* [**`KAFKA_WRITE_TIMEOUT`**](/reference/configuration#kafka_write_timeout): Set this to a reasonable limit (e.g., `10s`). If Kafka doesn't ACK within
-this window, the Relay fails the operation, allowing the DB event to be retried later.
-* [**`RETRY_MAX_ATTEMPTS`**](/reference/configuration#retry_max_attempts): Control how many times the Relay tries to publish a single event before
-moving on or backing off.
+* **Inside one publish:** [`KAFKA_MAX_ATTEMPTS`](/reference/configuration#kafka_max_attempts) (default `5`)
+  is how many times the Kafka client retries a write before giving up. Each attempt waits up to
+  [`KAFKA_CONNECTION_TIMEOUT`](/reference/configuration#kafka_connection_timeout) to connect and
+  [`KAFKA_WRITE_TIMEOUT`](/reference/configuration#kafka_write_timeout) for the broker's ACK.
+* **Across polls:** when a publish fails, the event goes back to `PENDING` with a backoff delay. After
+  [`RETRY_MAX_ATTEMPTS`](/reference/configuration#retry_max_attempts) failed publishes it is marked `DEAD`.
+
+A single publish can therefore block for roughly `KAFKA_MAX_ATTEMPTS × KAFKA_CONNECTION_TIMEOUT` when a
+broker silently drops traffic (about 50s with the defaults). During an outage the
+[health check](#health-checks) pauses the Relay and stops the current batch before its next event, so
+this per-publish limit is what bounds the delay. Keep it well below
+[`LEASE_TIMEOUT`](/reference/configuration#lease_timeout). Lowering `KAFKA_MAX_ATTEMPTS` shortens it, but
+each failure then uses one of the event's `RETRY_MAX_ATTEMPTS` sooner.

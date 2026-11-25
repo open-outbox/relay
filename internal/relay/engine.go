@@ -24,6 +24,7 @@ const (
 	defaultWatchInterval                 = 30 * time.Second
 	defaultHealthCheckInterval           = 5 * time.Second
 	defaultPublisherConnectRetryInterval = 5 * time.Second
+	defaultShutdownTimeout               = 15 * time.Second
 )
 
 // EngineMode dictates the runtime profile of this Relay instance.
@@ -104,6 +105,7 @@ type Engine struct {
 	events                        []Event
 	isHealthy                     atomic.Bool
 	healthCheckInterval           time.Duration
+	shutdownTimeout               time.Duration
 	lastStatus                    State
 	enableStats                   bool
 	enableReaper                  bool
@@ -121,6 +123,7 @@ type EngineParams struct {
 	ReapBatchSize                 int
 	PublisherConnectRetryInterval time.Duration
 	HealthCheckInterval           time.Duration
+	ShutdownTimeout               time.Duration
 	RetryPolicy                   RetryPolicy
 	EnableBatchPublish            bool
 	EnableStats                   bool
@@ -156,6 +159,10 @@ func NewEngine(
 
 	if params.PublisherConnectRetryInterval <= 0 {
 		params.PublisherConnectRetryInterval = defaultPublisherConnectRetryInterval
+	}
+
+	if params.ShutdownTimeout <= 0 {
+		params.ShutdownTimeout = defaultShutdownTimeout
 	}
 
 	if params.ReapBatchSize <= 0 {
@@ -194,6 +201,7 @@ func NewEngine(
 		meter:                         tel.Meter,
 		events:                        make([]Event, params.BatchSize),
 		healthCheckInterval:           params.HealthCheckInterval,
+		shutdownTimeout:               params.ShutdownTimeout,
 		enableStats:                   params.EnableStats,
 		enableReaper:                  params.EnableReaper,
 	}, nil
@@ -326,6 +334,12 @@ func (e *Engine) runProcessingLoop(ctx context.Context) error {
 	}
 }
 
+// ShutdownTimeout returns the total time the engine may spend shutting down
+// after a termination signal, with the default applied.
+func (e *Engine) ShutdownTimeout() time.Duration {
+	return e.shutdownTimeout
+}
+
 // Stop performs a graceful shutdown of the Engine.
 // It closes the underlying storage and publisher connections to ensure no data loss.
 func (e *Engine) Stop(ctx context.Context) error {
@@ -434,20 +448,52 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 
 	successIDs, failedEvents, err = e.publishOnByOne(ctx, events)
 
-	if err != nil {
+	paused := errors.Is(err, ErrPublisherPaused)
+	interrupted := utils.IsContextErr(err)
+	if err != nil && !paused && !interrupted {
 		return 0, err
 	}
 
+	recordCtx := ctx
+	if interrupted {
+		var cancel context.CancelFunc
+		recordCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), e.shutdownTimeout)
+		defer cancel()
+	}
+
 	if len(successIDs) > 0 {
-		if _, err := e.storage.MarkDeliveredBatch(ctx, successIDs); err != nil {
+		if _, err := e.storage.MarkDeliveredBatch(recordCtx, successIDs); err != nil {
 			return 0, err
 		}
 	}
 
 	if len(failedEvents) > 0 {
-		if _, err := e.storage.MarkFailedBatch(ctx, failedEvents); err != nil {
+		if _, err := e.storage.MarkFailedBatch(recordCtx, failedEvents); err != nil {
 			return 0, err
 		}
+	}
+
+	handled := len(successIDs) + len(failedEvents)
+
+	if interrupted {
+		e.logger.Info("shutdown mid-batch; recorded handled events, leaving the rest to the reaper",
+			zap.Int("count", len(events)),
+			zap.Int("successful", len(successIDs)),
+			zap.Int("failed", len(failedEvents)),
+			zap.Int("untried", len(events)-handled),
+		)
+		return handled, err
+	}
+
+	if paused {
+		e.logger.Warn("publisher became unhealthy mid-batch; leaving untried events to the reaper",
+			zap.Int("count", len(events)),
+			zap.Int("successful", len(successIDs)),
+			zap.Int("failed", len(failedEvents)),
+			zap.Int("untried", len(events)-handled),
+			zap.Duration("lease_timeout", e.leaseTimeout),
+		)
+		return handled, ErrPublisherPaused
 	}
 
 	e.logger.Info("process completed",
@@ -470,15 +516,19 @@ func (e *Engine) publishOnByOne(
 	for _, event := range events {
 		select {
 		case <-ctx.Done():
-			return nil, nil, ctx.Err()
+			return successEvents, failedEvents, ctx.Err()
 		default:
+		}
+
+		if !e.isHealthy.Load() {
+			return successEvents, failedEvents, ErrPublisherPaused
 		}
 
 		err := e.publisher.Publish(ctx, event)
 
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				return nil, nil, err
+				return successEvents, failedEvents, err
 			}
 
 			failedEvents = append(failedEvents, e.assessFailure(event, err))

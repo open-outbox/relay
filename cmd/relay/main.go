@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -60,8 +61,28 @@ func run() error {
 				}
 			}()
 
+			// SHUTDOWN_TIMEOUT is counted from the signal: the engine
+			// spends part of it recording an interrupted batch, and
+			// Stop gets the remaining time to cleanly shut down the engine.
+			var signalledAt atomic.Int64
+			stopWatching := context.AfterFunc(ctx, func() {
+				signalledAt.Store(time.Now().UnixNano())
+			})
+			defer stopWatching()
+
 			defer func() {
-				if err := engine.Stop(ctx); err != nil {
+				start := time.Now() // exiting on an error rather than a signal
+				if ns := signalledAt.Load(); ns != 0 {
+					start = time.Unix(0, ns)
+				}
+				// ctx is already cancelled at this point, so Stop needs its own
+				// context, or the publisher and storage would give up at once.
+				stopCtx, cancel := context.WithDeadline(
+					context.Background(),
+					start.Add(engine.ShutdownTimeout()),
+				)
+				defer cancel()
+				if err := engine.Stop(stopCtx); err != nil {
 					logger.Error("Failed to stop engine cleanly", zap.Error(err))
 				}
 			}()

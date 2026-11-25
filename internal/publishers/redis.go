@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
+	"github.com/open-outbox/relay/internal/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -130,7 +131,7 @@ func (r *Redis) isRedisErrorRetryable(err error) bool {
 		return false
 	}
 
-	if isContextError(err) {
+	if utils.IsContextErr(err) {
 		return true
 	}
 

@@ -364,7 +364,7 @@ func isKafkaErrorRetryable(err error) bool {
 		return true
 	}
 
-	if isContextError(err) {
+	if utils.IsContextErr(err) {
 		return true
 	}
 
