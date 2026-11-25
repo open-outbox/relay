@@ -92,13 +92,13 @@ test-integration: # Runs integration tests with the race detector
 	go test -v -race -tags=integration ./tests/integration/...
 
 test-all: # Runs all tests (Unit + Integration) with race detection
-	go test -v -race -count=1 -tags=integration ./...
+	go test -v -race -p 1 -count=1 -tags=integration ./...
 
 test-clean: # Cleans the Go test cache to ensure a fresh execution of all suites
 	go clean -testcache
 
 test-cover: # Runs all tests and generates a consolidated coverage report
-	go test -v -race -count=1 -tags=integration \
+	go test -v -race -p 1 -count=1 -tags=integration \
 		-coverprofile=coverage.out \
 		-coverpkg=./internal/... \
 		./...
