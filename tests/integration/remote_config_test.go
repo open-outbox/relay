@@ -4,82 +4,73 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/open-outbox/relay/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/consul"
 )
 
 func TestLoad_RemoteConsul(t *testing.T) {
-	ctx := context.Background()
+	endpoint := sharedConsul.get(t)
+	key := consulKey(t)
 
-	// 1. Start Consul Container
-	consulContainer, err := consul.Run(ctx, "hashicorp/consul:1.15")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		consulContainer.Terminate(ctx)
-	})
-
-	endpoint, err := consulContainer.ApiEndpoint(ctx)
-	require.NoError(t, err)
-
-	url := fmt.Sprintf("http://%s/v1/kv/%s", endpoint, "config/relay.yaml")
-
-	configYaml := `
+	seedConsul(t, endpoint, key, `
 BATCH_SIZE: 555
 PUBLISHER_TYPE: kafka
-`
-	seedConsul(t, endpoint, url, configYaml)
-
-	t.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
-	t.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
-	t.Setenv("REMOTE_CONFIG_PATH", "config/relay.yaml")
-	t.Setenv("REMOTE_CONFIG_TYPE", "yaml")
+`)
+	setRemoteConsulEnv(t, endpoint, key)
 
 	cfg, err := config.Load()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 555, cfg.BatchSize)
 	assert.Equal(t, "kafka", cfg.PublisherType)
 }
 
 func TestLoad_RemoteConsul_KeyNotFound(t *testing.T) {
-	ctx := context.Background()
+	endpoint := sharedConsul.get(t)
 
-	consulContainer, err := consul.Run(ctx, "hashicorp/consul:1.15")
-	require.NoError(t, err)
-	defer consulContainer.Terminate(ctx)
-
-	endpoint, _ := consulContainer.ApiEndpoint(ctx)
-
-	// 2. Point to a path that we NEVER seeded
-	t.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
-	t.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
-	t.Setenv("REMOTE_CONFIG_PATH", "non/existent/path.yaml")
+	// The key is unique to this test and never seeded.
+	setRemoteConsulEnv(t, endpoint, consulKey(t))
 
 	cfg, err := config.Load()
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read remote config")
 	assert.Nil(t, cfg)
 }
 
-func seedConsul(t *testing.T, endpoint string, url string, yamlData string) {
-	// url := fmt.Sprintf("http://%s/v1/kv/%s", endpoint, path)
+// consulKey returns a key unique to the test, so tests sharing the Consul
+// container cannot see each other's config.
+func consulKey(t *testing.T) string {
+	return "relay-tests/" + t.Name() + "/relay.yaml"
+}
 
-	req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(yamlData))
-	require.NoError(t, err, "Failed to create HTTP request for seeding")
+func setRemoteConsulEnv(t *testing.T, endpoint, key string) {
+	t.Helper()
+	t.Setenv("REMOTE_CONFIG_PROVIDER", "consul")
+	t.Setenv("REMOTE_CONFIG_ENDPOINT", endpoint)
+	t.Setenv("REMOTE_CONFIG_PATH", key)
+	t.Setenv("REMOTE_CONFIG_TYPE", "yaml")
+}
+
+func seedConsul(t *testing.T, endpoint, key, yamlData string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodPut, "http://"+endpoint+"/v1/kv/"+key, strings.NewReader(yamlData),
+	)
+	require.NoError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err, "Failed to execute HTTP request to Consul")
+	require.NoError(t, err, "failed to reach Consul")
 	defer resp.Body.Close()
 
-	// Assert that Consul accepted the data
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "Consul KV store did not return 200 OK")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "Consul did not store the config")
 }

@@ -14,12 +14,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/consul"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
+	consulImage   = "hashicorp/consul:1.15"
 	kafkaImage    = "confluentinc/confluent-local:7.5.0"
 	postgresImage = "postgres:16-alpine"
 	redisImage    = "redis:7-alpine"
@@ -35,6 +37,7 @@ const (
 var (
 	sharedPostgres = &shared[*postgresServer]{start: startPostgresServer}
 	sharedKafka    = &shared[string]{start: startKafkaBroker}
+	sharedConsul   = &shared[string]{start: startConsul}
 )
 
 type shared[T any] struct {
@@ -123,4 +126,13 @@ func startKafkaBroker(ctx context.Context) (string, testcontainers.Container, er
 		return "", c, err
 	}
 	return brokers[0], c, nil
+}
+
+func startConsul(ctx context.Context) (string, testcontainers.Container, error) {
+	c, err := consul.Run(ctx, consulImage)
+	if err != nil {
+		return "", c, err
+	}
+	endpoint, err := c.ApiEndpoint(ctx)
+	return endpoint, c, err
 }
