@@ -43,6 +43,7 @@ var kafkaSASLMechanisms = map[string]string{
 	"plain":         "plain",
 	"scram-sha-256": "scram-sha-256",
 	"scram-sha-512": "scram-sha-512",
+	"oauthbearer":   "oauthbearer",
 }
 
 var kafkaTLSVersions = map[string]uint16{
@@ -84,6 +85,11 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		return nil, err
 	}
 
+	extensions, err := parseKafkaOAuthExtensions(cfg.KafkaOAuthExtensions)
+	if err != nil {
+		return nil, err
+	}
+
 	return kafkapub.New(kafkapub.Config{
 		Brokers:           brokers,
 		MaxAttempts:       cfg.KafkaMaxAttempts,
@@ -107,6 +113,11 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		SASLMechanism:     mechanism,
 		Username:          cfg.KafkaUsername,
 		Password:          cfg.KafkaPassword,
+		OAuthTokenURL:     strings.TrimSpace(cfg.KafkaOAuthTokenURL),
+		OAuthClientID:     cfg.KafkaOAuthClientID,
+		OAuthClientSecret: cfg.KafkaOAuthClientSecret,
+		OAuthScopes:       splitAndTrim(cfg.KafkaOAuthScopes),
+		OAuthExtensions:   extensions,
 		IdleTimeout:       cfg.KafkaIdleTimeout,
 		KeepAlive:         cfg.KafkaKeepAlive,
 	})
@@ -121,4 +132,25 @@ func parseKafkaBrokers(url string) []string {
 		}
 	}
 	return brokers
+}
+
+func parseKafkaOAuthExtensions(list string) (map[string]string, error) {
+	items := splitAndTrim(list)
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	extensions := make(map[string]string, len(items))
+	for _, item := range items {
+		key, value, ok := strings.Cut(item, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return nil, fmt.Errorf(
+				"invalid KAFKA_OAUTH_EXTENSIONS entry %q: expected key=value",
+				item,
+			)
+		}
+		extensions[key] = strings.TrimSpace(value)
+	}
+	return extensions, nil
 }

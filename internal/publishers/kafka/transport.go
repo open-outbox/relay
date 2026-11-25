@@ -35,6 +35,9 @@ func (k *Publisher) getSASLMechanism() (sasl.Mechanism, error) {
 		}
 		return mechanism, nil
 
+	case "oauthbearer":
+		return k.newOAuthBearer()
+
 	default:
 		return nil, fmt.Errorf("unsupported SASL mechanism for Kafka: %s", k.cfg.SASLMechanism)
 	}
