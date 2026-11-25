@@ -25,15 +25,7 @@ func TestNatsHappyPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	t.Setenv("ENVIRONMENT", "production")
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "nats")
-	t.Setenv("PUBLISHER_URL", natsUrl)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("BATCH_SIZE", "10")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setNatsRelayEnv(t, pgConnStr, natsUrl)
 
 	// Build Application via DI Container
 	di, err := container.BuildContainer(ctx)
@@ -104,13 +96,7 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "nats")
-	t.Setenv("PUBLISHER_URL", natsUrl)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setNatsRelayEnv(t, pgConnStr, natsUrl)
 
 	di, _ := container.BuildContainer(ctx)
 

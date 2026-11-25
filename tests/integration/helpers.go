@@ -86,6 +86,30 @@ func setupTestPostgres(t *testing.T) (*sql.DB, string) {
 	return db, connStr
 }
 
+// setRelayEnv points the relay at the given Postgres and publisher.
+func setRelayEnv(t *testing.T, pgConnStr, publisherType, publisherURL string) {
+	t.Helper()
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("STORAGE_TYPE", "postgres")
+	t.Setenv("STORAGE_URL", pgConnStr)
+	t.Setenv("PUBLISHER_TYPE", publisherType)
+	t.Setenv("PUBLISHER_URL", publisherURL)
+	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+}
+
+func setNatsRelayEnv(t *testing.T, pgConnStr, natsURL string) {
+	t.Helper()
+	setRelayEnv(t, pgConnStr, "nats", natsURL)
+}
+
+func setRedisRelayEnv(t *testing.T, pgConnStr, redisURL string) {
+	t.Helper()
+	setRelayEnv(t, pgConnStr, "redis", redisURL)
+	t.Setenv("POLL_INTERVAL", "20ms")
+}
+
 func setupNats(t *testing.T) (*nats_go.Conn, string) {
 	t.Helper()
 	ctx := context.Background()

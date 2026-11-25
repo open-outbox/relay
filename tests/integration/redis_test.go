@@ -23,16 +23,7 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
 	defer cancel()
 
 	// Configure Environment for the DI Container
-	t.Setenv("ENVIRONMENT", "production")
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "redis")
-	t.Setenv("PUBLISHER_URL", redisUrl)
-	t.Setenv("POLL_INTERVAL", "20ms")
-	t.Setenv("BATCH_SIZE", "10")
-	t.Setenv("LEASE_TIMEOUT", "5s") // Small lease for fast testing
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setRedisRelayEnv(t, pgConnStr, redisUrl)
 
 	// Seed the Database
 	eventID := uuid.New()
@@ -98,18 +89,11 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "redis")
-	t.Setenv("PUBLISHER_URL", redisUrl)
-	t.Setenv("POLL_INTERVAL", "20ms")
-	t.Setenv("LEASE_TIMEOUT", "1m")
+	setRedisRelayEnv(t, pgConnStr, redisUrl)
 	t.Setenv("REDIS_WRITE_TIMEOUT", "100ms")
 	// Keep the first health check out of the test's window, so only the
 	// failed publish is under test.
 	t.Setenv("HEALTH_CHECK_INTERVAL", "1m")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
 	// Build and Start Engine
 	di, err := container.BuildContainer(ctx)
@@ -177,13 +161,7 @@ func TestRedis_WrongTypeKey_MarksEventDead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "redis")
-	t.Setenv("PUBLISHER_URL", redisUrl)
-	t.Setenv("POLL_INTERVAL", "20ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setRedisRelayEnv(t, pgConnStr, redisUrl)
 
 	const key = "orders.not.a.stream"
 	require.NoError(t, r.Set(ctx, key, "plain value", 0).Err())

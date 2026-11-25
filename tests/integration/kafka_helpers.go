@@ -66,13 +66,7 @@ func oversizedKafkaPayload(t *testing.T) string {
 // setKafkaRelayEnv points the relay at the given Postgres and Kafka instances.
 func setKafkaRelayEnv(t *testing.T, pgConnStr, kafkaBrokers string) {
 	t.Helper()
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "kafka")
-	t.Setenv("PUBLISHER_URL", kafkaBrokers)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setRelayEnv(t, pgConnStr, "kafka", kafkaBrokers)
 }
 
 // startKafkaEngine builds the DI container and starts the engine in the background.
