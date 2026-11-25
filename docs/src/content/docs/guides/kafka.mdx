@@ -105,6 +105,23 @@ KAFKA_BATCH_SIZE=1
 The Relay does not automatically create Kafka topics. Ensure your topics (matching the `event_type` in
 your database) are created beforehand, or that your Kafka brokers are configured with `auto.create.topics.enable=true`.
 
+### Health Checks
+At startup and every [`HEALTH_CHECK_INTERVAL`](/reference/configuration#health_check_interval), the
+Relay checks that it can actually produce to the cluster, not just reach a port:
+
+1. It connects to a broker from `PUBLISHER_URL`, including the TLS and SASL handshakes, and requests
+   the cluster's broker list.
+2. It connects to one of the brokers in that list.
+
+Producers send messages to the addresses brokers advertise (`advertised.listeners`), not to the
+bootstrap addresses. If the bootstrap broker answers but no advertised address is reachable from the
+Relay, the check fails with an error pointing at `advertised.listeners`, and the Relay stays paused
+instead of failing every publish. This is common in Docker and Kubernetes setups where brokers
+advertise `localhost` or an internal hostname.
+
+Configuration errors such as plaintext against a TLS listener, a missing client certificate or wrong
+SASL credentials are caught by the same check, so no delivery attempts are spent on them.
+
 ### Timeouts and Retries
 In synchronous mode (`KAFKA_ASYNC=false`), a network hiccup can stall the Relay. Use the following to
 prevent "zombie" locks in your database:

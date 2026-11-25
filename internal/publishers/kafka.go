@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
@@ -56,11 +58,15 @@ type KafkaConfig struct {
 // Kafka is a publisher that writes messages to an Apache Kafka cluster.
 // It implements the relay.Publisher interface.
 type Kafka struct {
-	writer    *kafka.Writer
-	cfg       KafkaConfig
-	dialer    *kafka.Dialer
-	transport *kafka.Transport
+	writer     *kafka.Writer
+	cfg        KafkaConfig
+	dialer     *kafka.Dialer
+	transport  *kafka.Transport
+	pingCursor atomic.Uint32
 }
+
+// defaultPingTimeout is used when the read timeout is zero.
+const defaultPingTimeout = 10 * time.Second
 
 // NewKafka builds the Kafka writer from cfg. It expects cfg.Brokers to hold
 // plain host:port addresses (URL parsing happens in the container), builds a
@@ -215,17 +221,27 @@ func closeWithContext(ctx context.Context, closeFn func() error) error {
 	}
 }
 
-// Ping verifies connectivity to the Kafka cluster. It dials each configured
-// broker in turn (performing the TLS and SASL handshakes when configured)
-// and succeeds as soon as one broker accepts the connection.
+// Ping verifies that the cluster can actually be produced to.
+// It runs in two steps:
+//
+//  1. Dial a bootstrap broker (TCP, TLS and SASL handshakes) and fetch the
+//     cluster's broker list with a metadata request. This goes over the
+//     network on every call; the producer's Transport is deliberately not
+//     used, because it answers metadata requests from its cache.
+//  2. Dial one of the brokers the cluster advertises. Producing connects to
+//     these advertised addresses (advertised.listeners), not the bootstrap
+//     ones, so a misconfigured listener would otherwise pass Ping while
+//     every publish fails.
+//
+// Ping succeeds as soon as one bootstrap broker answers and one advertised
+// broker is reachable.
 func (k *Kafka) Ping(ctx context.Context) error {
 	errs := make([]error, 0, len(k.cfg.Brokers))
 
 	for _, addr := range k.cfg.Brokers {
-		conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+		brokers, err := k.fetchBrokers(ctx, addr)
 		if err == nil {
-			_ = conn.Close()
-			return nil
+			return k.pingAdvertised(ctx, addr, brokers)
 		}
 
 		errs = append(errs, fmt.Errorf("broker %s: %w", addr, err))
@@ -235,6 +251,74 @@ func (k *Kafka) Ping(ctx context.Context) error {
 	}
 
 	return fmt.Errorf("failed to reach any kafka broker: %w", errors.Join(errs...))
+}
+
+func (k *Kafka) fetchBrokers(ctx context.Context, addr string) ([]kafka.Broker, error) {
+	// Not k.transport: it answers metadata requests from its cache.
+	conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err := conn.SetDeadline(k.pingDeadline(ctx)); err != nil {
+		return nil, fmt.Errorf("set deadline: %w", err)
+	}
+
+	brokers, err := conn.Brokers()
+	if err != nil {
+		return nil, fmt.Errorf("metadata request failed: %w", err)
+	}
+	if len(brokers) == 0 {
+		return nil, errors.New("metadata response listed no brokers")
+	}
+	return brokers, nil
+}
+
+func (k *Kafka) pingAdvertised(
+	ctx context.Context,
+	bootstrap string,
+	brokers []kafka.Broker,
+) error {
+	start := int(k.pingCursor.Add(1)) % len(brokers)
+	errs := make([]error, 0, len(brokers))
+
+	for i := range brokers {
+		b := brokers[(start+i)%len(brokers)]
+		addr := net.JoinHostPort(b.Host, strconv.Itoa(b.Port))
+
+		conn, err := k.dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+
+		errs = append(errs, fmt.Errorf("broker %d at %s: %w", b.ID, addr, err))
+		if ctx.Err() != nil {
+			break
+		}
+	}
+
+	return fmt.Errorf(
+		"bootstrap broker %s answered, but none of the brokers it advertises is reachable "+
+			"(check the brokers' advertised.listeners): %w",
+		bootstrap, errors.Join(errs...),
+	)
+}
+
+func (k *Kafka) pingDeadline(ctx context.Context) time.Time {
+	timeout := k.cfg.ReadTimeout
+	if timeout <= 0 {
+		timeout = defaultPingTimeout
+	}
+	deadline := time.Now().Add(timeout)
+
+	// kafka.Conn ignores ctx, so the caller's deadline only applies through
+	// this one; keep whichever comes first.
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		return d
+	}
+	return deadline
 }
 
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
