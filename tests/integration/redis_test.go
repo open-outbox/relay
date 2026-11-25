@@ -16,13 +16,12 @@ import (
 )
 
 func TestRedis_Publish_HappyPath(t *testing.T) {
-	// Use a slightly longer timeout for the whole test to account for container startup
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	// Setup Infrastructure
 	db, pgConnStr := setupTestPostgres(t)
 	r, redisUrl := setupRedis(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
 	// Configure Environment for the DI Container
 	t.Setenv("ENVIRONMENT", "production")
@@ -90,10 +89,11 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
 }
 
 func TestRedis_PublisherErrorHandling(t *testing.T) {
+	db, pgConnStr := setupTestPostgres(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	db, pgConnStr := setupTestPostgres(t)
 	// Setup Redis but keep the container handle so we can stop it
 	ctxBG := context.Background()
 	redisContainer, err := redis.Run(ctxBG, "redis:7-alpine")

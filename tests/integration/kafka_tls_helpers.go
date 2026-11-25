@@ -169,7 +169,7 @@ func setupKafkaTLS(t *testing.T, topic string, requireClientCert bool) (string, 
 	// "PLAINTEXT"; remapping that name to the SSL protocol turns it into a
 	// TLS listener while leaving the internal BROKER/CONTROLLER listeners
 	// (and the module's advertised-listener wiring) untouched.
-	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0",
+	kafkaContainer, err := kafka.Run(ctx, kafkaImage,
 		testcontainers.WithFiles(
 			testcontainers.ContainerFile{
 				HostFilePath:      certs.serverPEMFile,
@@ -202,22 +202,7 @@ func setupKafkaTLS(t *testing.T, topic string, requireClientCert bool) (string, 
 	require.NoError(t, err)
 	broker := brokers[0]
 
-	createKafkaTopicWithDialer(t, certs.Dialer(), broker, topic)
+	createKafkaTopic(t, certs.Dialer(), broker, topic)
 
 	return broker, certs
-}
-
-// createKafkaTopicWithDialer is createKafkaTopic for brokers that need a
-// custom (e.g. TLS) dialer.
-func createKafkaTopicWithDialer(t *testing.T, dialer *kafka_go.Dialer, broker, topic string) {
-	t.Helper()
-	conn, err := dialer.Dial("tcp", broker)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	require.NoError(t, conn.CreateTopics(kafka_go.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     1,
-		ReplicationFactor: 1,
-	}))
 }

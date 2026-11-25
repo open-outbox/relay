@@ -233,11 +233,11 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 }
 
 func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers := setupKafka(t, "test.event")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	oldWorkerID := "slow-worker-99"
 	newWorkerID := "fast-worker-01" // This is what our Engine will use

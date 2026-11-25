@@ -4,11 +4,9 @@ package integration
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"fmt"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,12 +17,9 @@ import (
 	nats_go "github.com/nats-io/nats.go"
 	"github.com/open-outbox/relay/internal/relay"
 	redis_go "github.com/redis/go-redis/v9"
-	kafka_go "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/testcontainers/testcontainers-go/modules/nats"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -60,35 +55,33 @@ func (s *PostgresSeeder) Seed(opts SeedOptions) {
 	seedPostgres(s.ctx, opts, s.pool, s.tableName)
 }
 
+// setupTestPostgres returns a fresh database with the outbox schema. All tests
+// share one Postgres container; each gets its own database, cloned from the
+// schema template, which is dropped when the test ends.
 func setupTestPostgres(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 	ctx := context.Background()
 
-	schemaPath, err := filepath.Abs("../../schema/postgres/open-outbox.sql")
+	pg := sharedPostgres.get(t)
+	name := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+
+	_, err := pg.admin.ExecContext(ctx, fmt.Sprintf(
+		"CREATE DATABASE %s TEMPLATE %s", name, postgresTemplateDB,
+	))
 	require.NoError(t, err)
 
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("outbox_db"),
-		postgres.WithUsername("user"),
-		postgres.WithPassword("pass"),
-		postgres.WithInitScripts(schemaPath),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(20*time.Second)),
-	)
+	connStr := pg.connString(name)
+	db, err := sql.Open("pgx", connStr)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		pgContainer.Terminate(context.Background())
+		_ = db.Close()
+		// FORCE closes connections the engine under test may still hold.
+		_, _ = pg.admin.ExecContext(
+			context.Background(),
+			fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", name),
+		)
 	})
-
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	db, err := sql.Open("pgx", connStr)
-	require.NoError(t, err)
 
 	return db, connStr
 }
@@ -146,50 +139,6 @@ func setupRedis(t *testing.T) (*redis_go.Client, string) {
 	return client, redisUrl
 }
 
-func setupKafka(t *testing.T, topic string) string {
-	t.Helper()
-	broker, _ := setupKafkaContainer(t, topic)
-	return broker
-}
-
-// setupKafkaContainer is like setupKafka but also returns the container so
-// tests can stop the broker to simulate an outage.
-func setupKafkaContainer(t *testing.T, topic string) (string, *kafka.KafkaContainer) {
-	t.Helper()
-	ctx := context.Background()
-
-	// The official module handles the "Advertised Listener" logic for you
-	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		kafkaContainer.Terminate(ctx)
-	})
-
-	// This returns the correctly mapped localhost:PORT
-	brokers, err := kafkaContainer.Brokers(ctx)
-	require.NoError(t, err)
-	broker := brokers[0]
-
-	// Create topic
-	createKafkaTopic(t, broker, topic)
-
-	return broker, kafkaContainer
-}
-
-func createKafkaTopic(t *testing.T, broker string, topic string) {
-	conn, err := kafka_go.Dial("tcp", broker)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	err = conn.CreateTopics(kafka_go.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     1,
-		ReplicationFactor: 1,
-	})
-	require.NoError(t, err)
-}
-
 func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tableName string) {
 	if opts.ID == uuid.Nil {
 		opts.ID = uuid.New()
@@ -226,16 +175,4 @@ func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tab
 	if err != nil {
 		panic(fmt.Sprintf("failed to seed postgres: %v", err))
 	}
-}
-
-// oversizedKafkaPayload returns a JSON payload larger than the broker's
-// default 1MB message.max.bytes. Random bytes don't compress, so the record
-// stays oversized even with snappy enabled. Publishing it fails with the
-// non-retryable MessageSizeTooLarge error.
-func oversizedKafkaPayload(t *testing.T) string {
-	t.Helper()
-	raw := make([]byte, 3<<20)
-	_, err := rand.Read(raw)
-	require.NoError(t, err)
-	return fmt.Sprintf(`{"data":%q}`, base64.StdEncoding.EncodeToString(raw))
 }

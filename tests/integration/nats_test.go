@@ -18,12 +18,12 @@ import (
 )
 
 func TestNatsHappyPath(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 
 	nc, natsUrl := setupNats(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("STORAGE_TYPE", "postgres")
@@ -98,11 +98,11 @@ func TestNatsHappyPath(t *testing.T) {
 }
 
 func TestNats_PublisherErrorHandling(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 	_, natsUrl := setupNats(t) // NATS is up, but we WON'T create a stream
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	t.Setenv("STORAGE_TYPE", "postgres")
 	t.Setenv("STORAGE_URL", pgConnStr)
