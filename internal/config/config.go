@@ -87,6 +87,13 @@ type Config struct {
 	// 	Default: "5s"
 	HealthCheckInterval time.Duration `mapstructure:"HEALTH_CHECK_INTERVAL"`
 
+	// ShutdownTimeout is the total time the relay may spend shutting down after
+	// a termination signal: recording a batch interrupted mid-publish, then
+	// closing the publisher and storage. Keep it below the orchestrator's grace
+	// period (e.g. Kubernetes terminationGracePeriodSeconds, 30s by default).
+	// 	Default: "15s"
+	ShutdownTimeout time.Duration `mapstructure:"SHUTDOWN_TIMEOUT"`
+
 	// EnableStats determines whether the engine performs background database
 	// scans to calculate backlog metrics (e.g., PENDING counts and oldest age).
 	// In high-scale environments with millions of rows, disabling this prevents
@@ -337,6 +344,7 @@ func Load() (*Config, error) {
 	v.SetDefault("LEASE_TIMEOUT", "3m")
 	v.SetDefault("REAP_BATCH_SIZE", 100)
 	v.SetDefault("HEALTH_CHECK_INTERVAL", "5s")
+	v.SetDefault("SHUTDOWN_TIMEOUT", "15s")
 	v.SetDefault("PUBLISHER_CONNECT_RETRY_INTERVAL", "5s")
 	v.SetDefault("ENABLE_STATS", false)
 	v.SetDefault("ENABLE_REAPER", true)
