@@ -108,6 +108,9 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	t.Setenv("POLL_INTERVAL", "100ms")
 	t.Setenv("LEASE_TIMEOUT", "1m")
 	t.Setenv("REDIS_WRITE_TIMEOUT", "100ms")
+	// Keep the first health check out of the test's window, so only the
+	// failed publish is under test.
+	t.Setenv("HEALTH_CHECK_INTERVAL", "1m")
 	t.Setenv("OTEL_TRACES_EXPORTER", "none")
 	t.Setenv("OTEL_METRICS_EXPORTER", "none")
 
@@ -130,8 +133,20 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// KILL REDIS immediately after starting the engine
-	// This ensures the first publish attempt fails.
+	// Deliver a warm-up event first, so we know the engine is connected
+	// and processing before Redis goes away.
+	warmupID := uuid.New()
+	_, err = db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
+                       VALUES ($1, 'warmup.stream', '{}', 'PENDING')`, warmupID)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		var status string
+		err := db.QueryRowContext(ctx, "SELECT status FROM openoutbox_events WHERE event_id = $1", warmupID).
+			Scan(&status)
+		return err == nil && status == "DELIVERED"
+	}, 10*time.Second, 100*time.Millisecond, "warm-up event should be delivered")
+
 	err = redisContainer.Terminate(ctxBG)
 	require.NoError(t, err)
 
