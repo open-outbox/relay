@@ -5,18 +5,13 @@ package container
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-outbox/relay/internal/config"
 	"github.com/open-outbox/relay/internal/publishers"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
 	"github.com/open-outbox/relay/internal/telemetry"
-	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/compress"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/dig"
@@ -66,58 +61,8 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				Meter:   mp.Meter(telemetry.InstrumentationName),
 			}
 		},
-		// Storage provider: selects and initializes the DB driver based on configuration.
-		func(ctx context.Context, cfg *config.Config, tel telemetry.Telemetry) (relay.Storage, error) {
-			switch cfg.StorageType {
-			case "postgres":
-				pool, err := pgxpool.New(ctx, cfg.StorageURL)
-				if err != nil {
-					return nil, err
-				}
-				postgres, err := storage.NewPostgres(pool, cfg.StorageTableName, cfg.RelayID, tel)
-				if err != nil {
-					return nil, err
-				}
-				return postgres, nil
-
-			case "mysql":
-				// return storage.NewMySQL(cfg.DatabaseURL), nil (To be implemented)
-				return nil, fmt.Errorf("mysql storage is not implemented yet")
-
-			default:
-				return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)
-			}
-		},
-		// Publisher provider: selects and initializes the message broker driver based on configuration.
-		func(cfg *config.Config) (relay.Publisher, error) {
-			switch cfg.PublisherType {
-			case "nats":
-				return publishers.NewNats(
-					cfg.PublisherURL,
-					cfg.NatsPublishTimeout,
-					cfg.NatsConnectionTimeout,
-				)
-
-			case "kafka":
-				return buildKafkaPublisher(*cfg)
-
-			case "redis":
-				return publishers.NewRedis(
-					cfg.PublisherURL,
-					cfg.RedisConnectionTimeout,
-					cfg.RedisWriteTimeout,
-				)
-
-			case "stdout":
-				return publishers.NewStdout(), nil
-
-			case "null":
-				return publishers.NewNull(), nil
-
-			default:
-				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
-			}
-		},
+		buildStorage,
+		buildPublisher,
 		// Relay Engine: wires the core processing logic with its required storage and publisher.
 		func(
 			s relay.Storage,
@@ -172,132 +117,4 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 	}
 
 	return c, nil
-
-}
-
-// buildKafkaPublisher is a specialized factory that maps generic application configuration
-// (strings) to Kafka-specific types like compression algorithms and required acknowledgment
-// levels. This separation keeps the main container logic clean.
-func parseKafkaBrokers(url string) []string {
-	var brokers []string
-	for _, entry := range strings.Split(url, ",") {
-		entry = strings.TrimPrefix(strings.TrimSpace(entry), "kafka://")
-		if entry != "" {
-			brokers = append(brokers, entry)
-		}
-	}
-	return brokers
-}
-
-func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
-
-	brokerList := parseKafkaBrokers(cfg.PublisherURL)
-	if len(brokerList) == 0 {
-		return nil, fmt.Errorf(
-			"failed to create publisher: no broker addresses provided for kafka publisher",
-		)
-	}
-
-	// Compression Mapping
-	compressionMap := map[string]kafka.Compression{
-		"gzip":   compress.Gzip,
-		"snappy": compress.Snappy,
-		"lz4":    compress.Lz4,
-		"zstd":   compress.Zstd,
-		"none":   compress.None,
-	}
-
-	comp, ok := compressionMap[strings.ToLower(cfg.KafkaCompression)]
-	if !ok {
-		return nil, fmt.Errorf("unsupported Kafka Compression type: %s", cfg.KafkaCompression)
-	}
-
-	// Required Acks Mapping
-	// We allow both human-readable strings and common string-integers
-	acksMap := map[string]kafka.RequiredAcks{
-		"all":  kafka.RequireAll,  // -1
-		"one":  kafka.RequireOne,  // 1
-		"none": kafka.RequireNone, // 0
-		"-1":   kafka.RequireAll,
-		"1":    kafka.RequireOne,
-		"0":    kafka.RequireNone,
-	}
-
-	acks, ok := acksMap[strings.ToLower(cfg.KafkaRequiredAcks)]
-
-	if !ok {
-		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaRequiredAcks)
-	}
-
-	balancerMap := map[string]kafka.Balancer{
-		"":        &kafka.Hash{},           // fnv1a (Sarama-compatible)
-		"fnv1a":   &kafka.Hash{},           // Sarama-compatible
-		"murmur2": kafka.Murmur2Balancer{}, // Java client, Streams, Connect
-		"crc32":   kafka.CRC32Balancer{},   // librdkafka consistent_random
-	}
-
-	balancer, ok := balancerMap[strings.ToLower(strings.TrimSpace(cfg.KafkaPartitioner))]
-	if !ok {
-		return nil, fmt.Errorf(
-			"unsupported Kafka partitioner: %s (supported: fnv1a, murmur2, crc32)",
-			cfg.KafkaPartitioner,
-		)
-	}
-
-	mechanism := strings.ToLower(strings.TrimSpace(cfg.KafkaSASLMechanism))
-	if mechanism != "" {
-		switch mechanism {
-		case "plain", "scram-sha-256", "scram-sha-512":
-		default:
-			return nil, fmt.Errorf(
-				"unsupported Kafka SASL Mechanism type: %s",
-				cfg.KafkaSASLMechanism,
-			)
-		}
-	}
-
-	var tlsVersionMap = map[string]uint16{
-		"1.0": tls.VersionTLS10,
-		"1.1": tls.VersionTLS11,
-		"1.2": tls.VersionTLS12,
-		"1.3": tls.VersionTLS13,
-	}
-
-	tlsVersion := tls.VersionTLS12
-
-	if v := strings.TrimSpace(cfg.KafkaTLSVersion); v != "" {
-		version, exists := tlsVersionMap[v]
-		if !exists {
-			return nil, fmt.Errorf("unsupported Kafka TLS version: %s", cfg.KafkaTLSVersion)
-		}
-		tlsVersion = int(version)
-	}
-
-	kCfg := publishers.KafkaConfig{
-		Brokers:           brokerList,
-		MaxAttempts:       cfg.KafkaMaxAttempts,
-		WriteTimeout:      cfg.KafkaWriteTimeout,
-		ReadTimeout:       cfg.KafkaReadTimeout,
-		ConnectionTimeout: cfg.KafkaConnectionTimeout,
-		BatchSize:         cfg.KafkaBatchSize,
-		BatchBytes:        cfg.KafkaBatchBytes,
-		BatchTimeout:      cfg.KafkaBatchTimeout,
-		Async:             cfg.KafkaAsync,
-		Compression:       comp,
-		RequiredAcks:      acks,
-		Balancer:          balancer,
-		TLSEnabled:        cfg.KafkaTLSEnabled,
-		TLSCA:             cfg.KafkaTLSCA,
-		TLSCert:           cfg.KafkaTLSCert,
-		TLSKey:            cfg.KafkaTLSKey,
-		TLSVersion:        uint16(tlsVersion),
-		ServerName:        cfg.KafkaServerName,
-		Insecure:          cfg.KafkaInsecure,
-		SASLMechanism:     mechanism,
-		Username:          cfg.KafkaUsername,
-		Password:          cfg.KafkaPassword,
-		IdleTimeout:       cfg.KafkaIdleTimeout,
-		KeepAlive:         cfg.KafkaKeepAlive,
-	}
-	return publishers.NewKafka(kCfg)
 }

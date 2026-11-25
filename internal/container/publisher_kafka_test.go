@@ -110,3 +110,40 @@ func TestBuildKafkaPublisher_NoBrokers(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no broker addresses provided")
 }
+
+func TestBuildKafkaPublisher_RejectsUnknownOptions(t *testing.T) {
+	base := config.Config{
+		PublisherURL:      "kafka://localhost:9092",
+		KafkaCompression:  "none",
+		KafkaRequiredAcks: "all",
+	}
+
+	tests := map[string]struct {
+		set     func(*config.Config)
+		wantErr string
+	}{
+		"compression": {
+			set:     func(c *config.Config) { c.KafkaCompression = "brotli" },
+			wantErr: "unsupported Kafka compression: brotli",
+		},
+		"required acks": {
+			set:     func(c *config.Config) { c.KafkaRequiredAcks = "2" },
+			wantErr: "unsupported Kafka required acks: 2",
+		},
+		"SASL mechanism": {
+			set:     func(c *config.Config) { c.KafkaSASLMechanism = "gssapi" },
+			wantErr: "unsupported Kafka SASL mechanism: gssapi",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := base
+			tt.set(&cfg)
+
+			_, err := buildKafkaPublisher(cfg)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
