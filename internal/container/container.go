@@ -178,11 +178,21 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 // buildKafkaPublisher is a specialized factory that maps generic application configuration
 // (strings) to Kafka-specific types like compression algorithms and required acknowledgment
 // levels. This separation keeps the main container logic clean.
+func parseKafkaBrokers(url string) []string {
+	var brokers []string
+	for _, entry := range strings.Split(url, ",") {
+		entry = strings.TrimPrefix(strings.TrimSpace(entry), "kafka://")
+		if entry != "" {
+			brokers = append(brokers, entry)
+		}
+	}
+	return brokers
+}
+
 func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 
-	brokerList := strings.Split(strings.TrimPrefix(cfg.PublisherURL, "kafka://"), ",")
-
-	if len(brokerList) < 1 || (len(brokerList) == 1 && brokerList[0] == "") {
+	brokerList := parseKafkaBrokers(cfg.PublisherURL)
+	if len(brokerList) == 0 {
 		return nil, fmt.Errorf(
 			"failed to create publisher: no broker addresses provided for kafka publisher",
 		)
