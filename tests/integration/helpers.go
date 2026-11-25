@@ -108,35 +108,37 @@ func setupNats(t *testing.T) (*nats_go.Conn, string) {
 
 func setupRedis(t *testing.T) (*redis_go.Client, string) {
 	t.Helper()
+	client, url, _ := setupRedisContainer(t)
+	return client, url
+}
+
+// setupRedisContainer is like setupRedis but also returns the container, so
+// tests can stop Redis to simulate an outage. The container is removed when
+// the test ends.
+func setupRedisContainer(t *testing.T) (*redis_go.Client, string, *redis.RedisContainer) {
+	t.Helper()
 	ctx := context.Background()
 
-	// Start Redis Container
-	redisContainer, err := redis.Run(ctx, "redis:7-alpine")
-	require.NoError(t, err)
-
-	// Ensure cleanup
+	redisContainer, err := redis.Run(ctx, redisImage)
 	t.Cleanup(func() {
-		if err := redisContainer.Terminate(context.Background()); err != nil {
-			t.Logf("failed to terminate container: %v", err)
+		if redisContainer != nil {
+			_ = redisContainer.Terminate(context.Background())
 		}
 	})
+	require.NoError(t, err)
 
 	endpoint, err := redisContainer.Endpoint(ctx, "")
 	require.NoError(t, err)
+	redisURL := "redis://" + endpoint
 
-	// Format URL for the publisher
-	redisUrl := "redis://" + endpoint
-
-	// Create a client for the test to verify results
-	opts, err := redis_go.ParseURL(redisUrl)
+	opts, err := redis_go.ParseURL(redisURL)
 	require.NoError(t, err)
-
 	client := redis_go.NewClient(opts)
+	t.Cleanup(func() { _ = client.Close() })
 
-	// Quick ping to ensure it's ready
 	require.NoError(t, client.Ping(ctx).Err())
 
-	return client, redisUrl
+	return client, redisURL, redisContainer
 }
 
 func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tableName string) {

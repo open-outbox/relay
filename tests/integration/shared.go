@@ -22,6 +22,7 @@ import (
 const (
 	kafkaImage    = "confluentinc/confluent-local:7.5.0"
 	postgresImage = "postgres:16-alpine"
+	redisImage    = "redis:7-alpine"
 
 	// postgresTemplateDB holds the outbox schema. Tests never connect to it,
 	// so it can be cloned with CREATE DATABASE ... TEMPLATE.
