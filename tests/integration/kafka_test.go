@@ -48,6 +48,7 @@ func TestKafkaHappyPath(t *testing.T) {
 		Dialer: &kafka.Dialer{
 			Timeout: 10 * time.Second,
 		},
+		MaxWait: 250 * time.Millisecond,
 	})
 	defer reader.Close()
 

@@ -155,6 +155,9 @@ func assertDelivered(
 		Partition:   0,
 		StartOffset: kafka_go.FirstOffset,
 		Dialer:      dialer,
+		// Close waits for the reader's in-flight fetch, which long-polls the
+		// broker for up to MaxWait (10s by default).
+		MaxWait: 250 * time.Millisecond,
 	})
 	defer reader.Close()
 
