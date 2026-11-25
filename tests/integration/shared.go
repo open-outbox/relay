@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	dockercontainer "github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/consul"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
+	"github.com/testcontainers/testcontainers-go/modules/nats"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -23,6 +25,7 @@ import (
 const (
 	consulImage   = "hashicorp/consul:1.15"
 	kafkaImage    = "confluentinc/confluent-local:7.5.0"
+	natsImage     = "nats:2.10-alpine"
 	postgresImage = "postgres:16-alpine"
 	redisImage    = "redis:7-alpine"
 
@@ -38,6 +41,7 @@ var (
 	sharedPostgres = &shared[*postgresServer]{start: startPostgresServer}
 	sharedKafka    = &shared[string]{start: startKafkaBroker}
 	sharedConsul   = &shared[string]{start: startConsul}
+	sharedNats     = &shared[string]{start: startNats}
 )
 
 type shared[T any] struct {
@@ -135,4 +139,18 @@ func startConsul(ctx context.Context) (string, testcontainers.Container, error) 
 	}
 	endpoint, err := c.ApiEndpoint(ctx)
 	return endpoint, c, err
+}
+
+func startNats(ctx context.Context) (string, testcontainers.Container, error) {
+	c, err := nats.Run(ctx, natsImage,
+		testcontainers.WithWaitStrategy(wait.ForLog("Server is ready")),
+		testcontainers.WithConfigModifier(func(conf *dockercontainer.Config) {
+			conf.Cmd = []string{"-js"}
+		}),
+	)
+	if err != nil {
+		return "", c, err
+	}
+	url, err := c.ConnectionString(ctx)
+	return url, c, err
 }

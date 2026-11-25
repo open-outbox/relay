@@ -13,15 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	dockercontainer "github.com/moby/moby/api/types/container"
 	nats_go "github.com/nats-io/nats.go"
 	"github.com/open-outbox/relay/internal/relay"
 	redis_go "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/nats"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 type SeedOptions struct {
@@ -109,22 +105,15 @@ func setRedisRelayEnv(t *testing.T, pgConnStr, redisURL string) {
 	setRelayEnv(t, pgConnStr, "redis", redisURL)
 }
 
+// setupNats returns a client connected to the shared JetStream server, and
+// its URL. Tests share the server, so each uses its own streams and subjects.
 func setupNats(t *testing.T) (*nats_go.Conn, string) {
 	t.Helper()
-	ctx := context.Background()
+	url := sharedNats.get(t)
 
-	natsContainer, err := nats.Run(ctx, "nats:2.10-alpine",
-		testcontainers.WithWaitStrategy(wait.ForLog("Server is ready")),
-		testcontainers.WithConfigModifier(func(conf *dockercontainer.Config) {
-			conf.Cmd = []string{"-js"}
-		}),
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() { natsContainer.Terminate(context.Background()) })
-
-	url, _ := natsContainer.ConnectionString(ctx)
 	nc, err := nats_go.Connect(url)
 	require.NoError(t, err)
+	t.Cleanup(nc.Close)
 
 	return nc, url
 }

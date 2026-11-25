@@ -31,16 +31,17 @@ func TestNatsHappyPath(t *testing.T) {
 	di, err := container.BuildContainer(ctx)
 	require.NoError(t, err)
 
+	// The server is shared, so the stream and subjects are this test's own.
 	js, err := nc.JetStream()
+	require.NoError(t, err)
 	_, err = js.AddStream(&nats_go.StreamConfig{
-		Name:     "OPENOUTBOX_EVENTS",
-		Subjects: []string{"openoutbox.events.>"},
+		Name:     "RELAY_TESTS_HAPPY",
+		Subjects: []string{"relay-tests.happy.>"},
 	})
 	require.NoError(t, err, "Failed to create JetStream stream")
+	t.Cleanup(func() { _ = js.DeleteStream("RELAY_TESTS_HAPPY") })
 
-	// Setup Subscriber and Seed Data
-	// Using the topic name from your NATS implementation
-	topic := "openoutbox.events.v1"
+	topic := "relay-tests.happy.v1"
 	sub, err := nc.SubscribeSync(topic)
 	require.NoError(t, err)
 
@@ -50,7 +51,7 @@ func TestNatsHappyPath(t *testing.T) {
 	_, err = db.Exec(`
 		INSERT INTO openoutbox_events (event_id, event_type, payload, status)
 		VALUES ($1, $2, $3, 'PENDING')`,
-		eventID, "openoutbox.events.v1", payload)
+		eventID, topic, payload)
 	require.NoError(t, err)
 
 	err = di.Invoke(func(pub relay.Publisher) {
@@ -91,7 +92,7 @@ func TestNatsHappyPath(t *testing.T) {
 
 func TestNats_PublisherErrorHandling(t *testing.T) {
 	db, pgConnStr := setupTestPostgres(t)
-	_, natsUrl := setupNats(t) // NATS is up, but we WON'T create a stream
+	_, natsUrl := setupNats(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -100,11 +101,10 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 
 	di, _ := container.BuildContainer(ctx)
 
-	// Insert an event.
-	// Since we didn't call js.AddStream(), NATS will reject the publish.
+	// No stream covers this subject, so NATS rejects the publish.
 	eventID := uuid.New()
 	_, err := db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
-                       VALUES ($1, 'openoutbox.events.v1', '{}', 'PENDING')`, eventID)
+                       VALUES ($1, 'relay-tests.nostream.v1', '{}', 'PENDING')`, eventID)
 	require.NoError(t, err)
 
 	// Start the Engine through DI

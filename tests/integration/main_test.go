@@ -12,5 +12,6 @@ func TestMain(m *testing.M) {
 	sharedPostgres.stop()
 	sharedKafka.stop()
 	sharedConsul.stop()
+	sharedNats.stop()
 	os.Exit(code)
 }
