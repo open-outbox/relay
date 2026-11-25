@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-outbox/relay/internal/relay"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/compress"
 	"github.com/segmentio/kafka-go/protocol"
@@ -612,4 +613,28 @@ func TestKafka_pingDeadline(t *testing.T) {
 		d := (&Kafka{}).pingDeadline(context.Background())
 		assert.WithinDuration(t, time.Now().Add(defaultPingTimeout), d, 100*time.Millisecond)
 	})
+}
+
+func TestKafka_Publish_EmptyTypeIsPermanent(t *testing.T) {
+	// The address is never dialled: the event is rejected before any write.
+	k, err := NewKafka(KafkaConfig{Brokers: []string{"127.0.0.1:1"}})
+	require.NoError(t, err)
+
+	calls := map[string]func() error{
+		"Publish": func() error {
+			return k.Publish(context.Background(), relay.Event{Type: ""})
+		},
+		"PublishBatch": func() error {
+			return k.PublishBatch(context.Background(), []relay.Event{{Type: ""}})
+		},
+	}
+
+	for name, publish := range calls {
+		t.Run(name, func(t *testing.T) {
+			var pubErr *relay.PublishError
+			require.ErrorAs(t, publish(), &pubErr)
+			assert.False(t, pubErr.IsRetryable)
+			assert.Equal(t, "INVALID_TOPIC", pubErr.Code)
+		})
+	}
 }

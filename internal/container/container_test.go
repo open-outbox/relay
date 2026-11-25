@@ -78,3 +78,35 @@ func TestBuildKafkaPublisher_Partitioner(t *testing.T) {
 		assert.Contains(t, err.Error(), "unsupported Kafka partitioner: xxhash")
 	})
 }
+
+func TestParseKafkaBrokers(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want []string
+	}{
+		{"single broker", "kafka://a:9092", []string{"a:9092"}},
+		{"without scheme", "a:9092,b:9092", []string{"a:9092", "b:9092"}},
+		{
+			"spaces around entries",
+			"kafka://a:9092, b:9092 ,\tc:9092",
+			[]string{"a:9092", "b:9092", "c:9092"},
+		},
+		{"scheme on every entry", "kafka://a:9092,kafka://b:9092", []string{"a:9092", "b:9092"}},
+		{"empty entries are skipped", "kafka://a:9092,, ,b:9092,", []string{"a:9092", "b:9092"}},
+		{"empty url", "", nil},
+		{"scheme only", "kafka://", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, parseKafkaBrokers(tt.url))
+		})
+	}
+}
+
+func TestBuildKafkaPublisher_NoBrokers(t *testing.T) {
+	_, err := buildKafkaPublisher(config.Config{PublisherURL: "kafka:// , "})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no broker addresses provided")
+}

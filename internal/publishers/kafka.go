@@ -322,6 +322,14 @@ func (k *Kafka) pingDeadline(ctx context.Context) time.Time {
 }
 
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
+	if event.Type == "" {
+		return kafka.Message{}, &relay.PublishError{
+			Err:         errors.New("event type is empty, so there is no topic to publish to"),
+			IsRetryable: false,
+			Code:        "INVALID_TOPIC",
+		}
+	}
+
 	var kafkaKey []byte
 
 	pKey := event.GetPartitionKey()
