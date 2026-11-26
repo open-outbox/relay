@@ -3,15 +3,18 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/segmentio/kafka-go"
 )
+
+// eventIDHeader carries the event ID on every message.
+const eventIDHeader = "X-Event-ID"
 
 // Publisher is a publisher that writes messages to an Apache Kafka cluster.
 // It implements the relay.Publisher interface.
@@ -250,24 +253,29 @@ func (k *Publisher) mapToKafkaMessage(event relay.Event) (kafka.Message, error) 
 		kafkaKey = []byte(pKey)
 	}
 
-	var userHeaders map[string]string
-	if len(event.Headers) > 0 {
-		if err := json.Unmarshal(event.Headers, &userHeaders); err != nil {
-			return kafka.Message{}, &relay.PublishError{
-				Err:         fmt.Errorf("failed to unmarshal event headers: %w", err),
-				IsRetryable: false,
-				Code:        "INVALID_HEADERS",
-			}
-		}
+	userHeaders, err := event.HeaderMap()
+	if err != nil {
+		return kafka.Message{}, err
 	}
 
-	headers := make([]kafka.Header, 0, len(userHeaders)+1)
-	for key, value := range userHeaders {
-		headers = append(headers, kafka.Header{Key: key, Value: []byte(value)})
+	// Sorted, so the same event always carries its headers in the same order.
+	keys := make([]string, 0, len(userHeaders))
+	for key := range userHeaders {
+		// The relay sets X-Event-ID itself; a user value would add a second
+		// header with the same name.
+		if !strings.EqualFold(key, eventIDHeader) {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+
+	headers := make([]kafka.Header, 0, len(keys)+1)
+	for _, key := range keys {
+		headers = append(headers, kafka.Header{Key: key, Value: []byte(userHeaders[key])})
 	}
 
 	headers = append(headers, kafka.Header{
-		Key:   "X-Event-ID",
+		Key:   eventIDHeader,
 		Value: []byte(event.ID.String()),
 	})
 

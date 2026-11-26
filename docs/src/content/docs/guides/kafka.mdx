@@ -22,6 +22,14 @@ For more Kafka related configuration options please refer to
 
 ---
 
+## Message Headers
+
+The `headers` column is sent as Kafka record headers, converted as described in [Headers](/concepts/table-schema#headers). Headers are sorted by name, so an event always carries them in the same order.
+
+The Relay adds `X-Event-ID` with the event ID to every message. A user header of the same name, in any case, is replaced by it.
+
+---
+
 ## Partitioning & Ordering
 
 The Relay maps the `partition_key` column from your database directly to the **Kafka Message Key**.

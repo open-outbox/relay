@@ -37,4 +37,4 @@ The Postgres event columns are mapped to Redis hash fields within the stream ent
 | `id` | The original UUID from the database. |
 | `payload` | The event body (JSON or binary). |
 | `partition_key` | The key used for consumer-side ordering. |
-| `h:*` | Metadata/Headers are prefixed with `h:` (e.g., `h:trace_id`). |
+| `h:*` | One field per header, prefixed with `h:` (e.g., `h:trace_id`) so it cannot collide with the fields above. Values are converted as described in [Headers](/concepts/table-schema#headers). |

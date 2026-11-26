@@ -3,9 +3,9 @@ package nats
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -82,35 +82,15 @@ func (n *Publisher) Publish(ctx context.Context, event relay.Event) error {
 		}
 	}
 
-	msg := nats.NewMsg(event.Type)
-	msg.Data = event.Payload
-
-	if len(event.Headers) > 0 {
-		var hMap map[string]string
-		if err := json.Unmarshal(event.Headers, &hMap); err != nil {
-			return &relay.PublishError{
-				Err:         fmt.Errorf("invalid headers json: %w", err),
-				IsRetryable: false,
-				Code:        "INVALID_HEADERS",
-			}
-		}
-		for k, v := range hMap {
-			msg.Header.Set(k, v)
-		}
-	}
-
-	msg.Header.Set("Nats-Msg-Id", event.ID.String())
-
-	pkey := event.GetPartitionKey()
-
-	if pkey != "" {
-		msg.Header.Set("X-Partition-Key", pkey)
+	msg, err := newMsg(event)
+	if err != nil {
+		return err
 	}
 
 	pubCtx, cancel := context.WithTimeout(ctx, n.publishTimeout)
 	defer cancel()
 
-	_, err := n.js.PublishMsg(msg, nats.Context(pubCtx))
+	_, err = n.js.PublishMsg(msg, nats.Context(pubCtx))
 
 	if err != nil {
 		return &relay.PublishError{
@@ -120,6 +100,61 @@ func (n *Publisher) Publish(ctx context.Context, event relay.Event) error {
 		}
 	}
 
+	return nil
+}
+
+const (
+	msgIDHeader        = "Nats-Msg-Id"
+	partitionKeyHeader = "X-Partition-Key"
+)
+
+// newMsg maps an event to a NATS message. The relay's own headers replace
+// user headers of the same name, in any case: NATS header names are
+// case-sensitive, so "nats-msg-id" would otherwise be sent next to
+// "Nats-Msg-Id" instead of replacing it.
+func newMsg(event relay.Event) (*nats.Msg, error) {
+	userHeaders, err := event.HeaderMap()
+	if err != nil {
+		return nil, err
+	}
+
+	msg := nats.NewMsg(event.Type)
+	msg.Data = event.Payload
+
+	pkey := event.GetPartitionKey()
+	for key, value := range userHeaders {
+		if err := validateHeaderName(key); err != nil {
+			return nil, relay.InvalidHeadersError(err)
+		}
+		if strings.EqualFold(key, msgIDHeader) ||
+			(pkey != "" && strings.EqualFold(key, partitionKeyHeader)) {
+			continue
+		}
+		msg.Header.Set(key, value)
+	}
+
+	msg.Header.Set(msgIDHeader, event.ID.String())
+	if pkey != "" {
+		msg.Header.Set(partitionKeyHeader, pkey)
+	}
+	return msg, nil
+}
+
+// validateHeaderName rejects names that would corrupt the header block,
+// which is written as "Name: value" lines. Values need no check: the
+// client replaces CR and LF in them with spaces.
+func validateHeaderName(name string) error {
+	if name == "" {
+		return errors.New("header name is empty")
+	}
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; c <= ' ' || c == ':' || c >= 0x7f {
+			return fmt.Errorf(
+				"header name %q is not valid for NATS: "+
+					"it must be printable ASCII without spaces or colons", name,
+			)
+		}
+	}
 	return nil
 }
 

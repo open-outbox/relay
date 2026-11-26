@@ -19,6 +19,21 @@ To enable the NATS publisher, set the following environment variables.
 
 ---
 
+## Message Headers
+
+The `headers` column is sent as NATS message headers, converted as described in [Headers](/concepts/table-schema#headers). The Relay also sets:
+
+| Header | Value |
+| :--- | :--- |
+| `Nats-Msg-Id` | The event ID, which JetStream uses to drop duplicate publishes. |
+| `X-Partition-Key` | The `partition_key`, when the event has one. |
+
+NATS header names are case-sensitive, so a user header matching either name in any case is replaced rather than sent alongside it.
+
+Header names must be printable ASCII without spaces or colons, since NATS writes headers as `Name: value` lines. An event with any other name is marked `DEAD` with `INVALID_HEADERS`.
+
+---
+
 ## JetStream Requirement
 
 Open Outbox Relay requires **NATS JetStream** to be enabled on your NATS cluster. The Relay publishes events to subjects, but those subjects must be backed by a Stream to ensure persistence.
