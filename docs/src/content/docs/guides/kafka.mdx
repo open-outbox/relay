@@ -163,6 +163,13 @@ advertise `localhost` or an internal hostname.
 Configuration errors such as plaintext against a TLS listener, a missing client certificate or wrong
 SASL credentials are caught by the same check, so no delivery attempts are spent on them.
 
+Each check opens two new connections, with full TLS and SASL handshakes, and closes them again. At the
+default interval of `5s`, every replica does this twelve times a minute. That is harmless for the
+cluster, but every handshake shows up in the broker's authentication logs. If that is noisy, raise
+`HEALTH_CHECK_INTERVAL` to `15s` or `30s`. The trade-off is that the Relay notices an outage later, so a batch that is already being
+published keeps trying events against the unavailable cluster for longer, and each failed event
+spends a delivery attempt.
+
 ### Timeouts and Retries
 Failed publishes are retried at two levels:
 
