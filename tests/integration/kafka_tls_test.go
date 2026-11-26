@@ -16,8 +16,13 @@ import (
 func TestKafkaTLS(t *testing.T) {
 	db, pgConnStr := setupTestPostgres(t)
 
+	// Both brokers start at the same time, which saves one broker startup.
+	brokers := setupKafkaTLSBrokers(t, false, true)
+	oneWay, mutual := brokers[0], brokers[1]
+
 	t.Run("OneWayTLS", func(t *testing.T) {
-		broker, certs := setupKafkaTLS(t, "tls.ca.v1", false)
+		broker, certs := oneWay.Addr, oneWay.Certs
+		createKafkaTopic(t, certs.Dialer(), broker, "tls.ca.v1")
 		createKafkaTopic(t, certs.Dialer(), broker, "tls.insecure.v1")
 
 		t.Run("CA_VerifiesBrokerAndDelivers", func(t *testing.T) {
@@ -75,7 +80,8 @@ func TestKafkaTLS(t *testing.T) {
 	})
 
 	t.Run("MutualTLS", func(t *testing.T) {
-		broker, certs := setupKafkaTLS(t, "mtls.v1", true)
+		broker, certs := mutual.Addr, mutual.Certs
+		createKafkaTopic(t, certs.Dialer(), broker, "mtls.v1")
 
 		t.Run("ClientCert_Delivers", func(t *testing.T) {
 			setKafkaRelayEnv(t, pgConnStr, broker)

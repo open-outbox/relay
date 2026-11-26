@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
+	"golang.org/x/sync/errgroup"
 )
 
 const kafkaSecretsDir = "/etc/kafka/secrets"
@@ -151,15 +152,56 @@ func generateKafkaTLSCerts(t *testing.T) *kafkaTLSCerts {
 	return certs
 }
 
-// setupKafkaTLS starts a Kafka broker whose client-facing listener only
-// speaks TLS, using a freshly generated CA. With requireClientCert the
-// broker also enforces mTLS. The topic is created over the TLS listener.
-// It returns the broker address and the generated certificates.
-func setupKafkaTLS(t *testing.T, topic string, requireClientCert bool) (string, *kafkaTLSCerts) {
-	t.Helper()
-	ctx := context.Background()
-	certs := generateKafkaTLSCerts(t)
+// kafkaTLSBroker is a broker whose client-facing listener only speaks TLS,
+// and the throwaway PKI generated for it.
+type kafkaTLSBroker struct {
+	Addr  string
+	Certs *kafkaTLSCerts
+}
 
+// setupKafkaTLSBrokers starts one TLS broker per entry, concurrently, each
+// with its own CA. An entry of true makes that broker require client
+// certificates (mTLS). The brokers are removed when the test ends.
+func setupKafkaTLSBrokers(t *testing.T, requireClientCert ...bool) []kafkaTLSBroker {
+	t.Helper()
+	brokers := make([]kafkaTLSBroker, len(requireClientCert))
+	containers := make([]*kafka.KafkaContainer, len(requireClientCert))
+
+	// generateKafkaTLSCerts uses require, so it runs here rather than in
+	// the goroutines.
+	for i := range brokers {
+		brokers[i].Certs = generateKafkaTLSCerts(t)
+	}
+
+	var g errgroup.Group
+	for i, mtls := range requireClientCert {
+		g.Go(func() error {
+			c, addr, err := startKafkaTLS(context.Background(), brokers[i].Certs, mtls)
+			containers[i], brokers[i].Addr = c, addr
+			return err
+		})
+	}
+	err := g.Wait()
+
+	t.Cleanup(func() {
+		for _, c := range containers {
+			if c != nil {
+				terminate(c)
+			}
+		}
+	})
+	require.NoError(t, err)
+
+	return brokers
+}
+
+// startKafkaTLS starts a broker whose client-facing listener only speaks
+// TLS, using certs. With requireClientCert the broker also enforces mTLS.
+func startKafkaTLS(
+	ctx context.Context,
+	certs *kafkaTLSCerts,
+	requireClientCert bool,
+) (*kafka.KafkaContainer, string, error) {
 	clientAuth := "none"
 	if requireClientCert {
 		clientAuth = "required"
@@ -169,7 +211,7 @@ func setupKafkaTLS(t *testing.T, topic string, requireClientCert bool) (string, 
 	// "PLAINTEXT"; remapping that name to the SSL protocol turns it into a
 	// TLS listener while leaving the internal BROKER/CONTROLLER listeners
 	// (and the module's advertised-listener wiring) untouched.
-	kafkaContainer, err := kafka.Run(ctx, kafkaImage,
+	c, err := kafka.Run(ctx, kafkaImage,
 		testcontainers.WithFiles(
 			testcontainers.ContainerFile{
 				HostFilePath:      certs.serverPEMFile,
@@ -191,18 +233,13 @@ func setupKafkaTLS(t *testing.T, topic string, requireClientCert bool) (string, 
 			"KAFKA_SSL_CLIENT_AUTH":                clientAuth,
 		}),
 	)
-	t.Cleanup(func() {
-		if kafkaContainer != nil {
-			_ = kafkaContainer.Terminate(ctx)
-		}
-	})
-	require.NoError(t, err)
+	if err != nil {
+		return c, "", err
+	}
 
-	brokers, err := kafkaContainer.Brokers(ctx)
-	require.NoError(t, err)
-	broker := brokers[0]
-
-	createKafkaTopic(t, certs.Dialer(), broker, topic)
-
-	return broker, certs
+	brokers, err := c.Brokers(ctx)
+	if err != nil {
+		return c, "", err
+	}
+	return c, brokers[0], nil
 }
