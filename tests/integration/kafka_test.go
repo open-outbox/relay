@@ -120,6 +120,19 @@ func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
 	assert.Contains(t, *lastError, "Unknown Topic Or Partition")
 }
 
+// With KAFKA_METADATA_TOPICS set, the writer's metadata cache holds only the
+// listed topics. A listed topic must still be delivered through it.
+func TestKafka_MetadataTopics_Delivers(t *testing.T) {
+	topic := "scoped.v1"
+	db, pgConnStr := setupTestPostgres(t)
+	broker := setupKafka(t, topic)
+
+	setKafkaRelayEnv(t, pgConnStr, broker)
+	t.Setenv("KAFKA_METADATA_TOPICS", "other.v1,"+topic)
+
+	assertDelivered(t, db, broker, nil, topic)
+}
+
 // A message larger than the broker's limit can never succeed: the event must
 // be killed on the first attempt rather than scheduled for retry.
 func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {

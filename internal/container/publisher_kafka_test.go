@@ -1,11 +1,13 @@
 package container
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/open-outbox/relay/internal/config"
 	kafkapub "github.com/open-outbox/relay/internal/publishers/kafka"
+	"github.com/open-outbox/relay/internal/relay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -185,4 +187,23 @@ func TestBuildKafkaPublisher_OAuthBearer(t *testing.T) {
 	_, err = buildKafkaPublisher(cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "KAFKA_OAUTH_EXTENSIONS")
+}
+
+func TestBuildKafkaPublisher_MetadataScope(t *testing.T) {
+	cfg := config.Config{
+		PublisherURL:        "kafka://localhost:9092",
+		KafkaCompression:    "none",
+		KafkaRequiredAcks:   "all",
+		KafkaMetadataTopics: " orders.v1, ,payments.v1 ",
+	}
+
+	p, err := buildKafkaPublisher(cfg)
+	require.NoError(t, err)
+
+	// The list reaches the publisher: an unlisted topic is rejected before
+	// any write, so the broker address is never dialled.
+	err = p.Publish(context.Background(), relay.Event{Type: "other.v1"})
+	var pubErr *relay.PublishError
+	require.ErrorAs(t, err, &pubErr)
+	assert.Equal(t, "TOPIC_NOT_IN_METADATA", pubErr.Code)
 }

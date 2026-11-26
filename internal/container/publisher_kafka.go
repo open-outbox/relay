@@ -121,6 +121,8 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 		OAuthExtensions:   extensions,
 		IdleTimeout:       cfg.KafkaIdleTimeout,
 		KeepAlive:         cfg.KafkaKeepAlive,
+		MetadataTopics:    splitAndTrim(cfg.KafkaMetadataTopics),
+		MetadataTTL:       cfg.KafkaMetadataTTL,
 	})
 }
 

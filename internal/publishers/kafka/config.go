@@ -44,6 +44,14 @@ type Config struct {
 	OAuthExtensions   map[string]string
 	IdleTimeout       time.Duration
 	KeepAlive         time.Duration
+
+	// MetadataTopics limits the cluster metadata the writer fetches to these
+	// topics. Empty means all topics. When set, events for any other topic
+	// are rejected before they reach Kafka.
+	MetadataTopics []string
+	// MetadataTTL is how often the writer refreshes cluster metadata.
+	// Zero uses the kafka-go default (6s).
+	MetadataTTL time.Duration
 }
 
 // DefaultClientID is the client ID sent to the brokers when none is set.

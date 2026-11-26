@@ -335,6 +335,19 @@ type Config struct {
 	//  Default: 30s
 	KafkaKeepAlive time.Duration `mapstructure:"KAFKA_KEEP_ALIVE"`
 
+	// KafkaMetadataTopics is a comma-separated list of the topics the relay
+	// publishes to. When set, the Kafka client fetches metadata for these
+	// topics only, instead of every topic in the cluster, and events for any
+	// other topic fail with a retryable error.
+	//  Default: "" (all topics)
+	KafkaMetadataTopics string `mapstructure:"KAFKA_METADATA_TOPICS"`
+
+	// KafkaMetadataTTL is how often the Kafka client refreshes cluster
+	// metadata. Longer values mean fewer metadata requests, but partition
+	// leader changes and new partitions are noticed later.
+	//  Default: 6s
+	KafkaMetadataTTL time.Duration `mapstructure:"KAFKA_METADATA_TTL"`
+
 	// RemoteConfigProvider determines the external source for configuration.
 	// Supported providers: "etcd3", "consul", or "firestore".
 	//  Default: ""
@@ -414,6 +427,7 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_INSECURE", false)
 	v.SetDefault("KAFKA_IDLE_TIMEOUT", "30s")
 	v.SetDefault("KAFKA_KEEP_ALIVE", "30s")
+	v.SetDefault("KAFKA_METADATA_TTL", "6s")
 
 	//Remote config settings
 	v.SetDefault("REMOTE_CONFIG_TYPE", "yaml")
