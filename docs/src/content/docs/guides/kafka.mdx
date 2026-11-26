@@ -93,13 +93,14 @@ currently sitting in the buffer.
 There is a direct relationship between your reliability settings and the [`KAFKA_BATCH_SIZE`](/reference/configuration#kafka_batch_size).
 
 When running in **Synchronous mode** (`KAFKA_ASYNC=false`), the Relay waits for a broker acknowledgment before
-moving to the next event. In this mode, a large batch size can actually **decrease** performance because the
-producer waits to fill its buffer before sending the request.
+moving to the next event, so the producer never has more than one message to batch.
 
-* **For Maximum Reliability:** Set `KAFKA_BATCH_SIZE=1`. This ensures every event is dispatched and acknowledged
-individually, providing the lowest latency per event in synchronous mode.
-* **For High Throughput:** If you prioritize volume over individual event latency, increase the batch size,
-but note that this works best when `KAFKA_ASYNC` is set to `true` (at the cost of delivery guarantees).
+* **Synchronous mode:** keep `KAFKA_BATCH_SIZE=1`. A larger value never fills a batch; instead every event waits
+the full [`KAFKA_BATCH_TIMEOUT`](/reference/configuration#kafka_batch_timeout) before it is sent, which lowers
+throughput. Each relay instance publishes at most one event per broker round trip, so its throughput is bounded
+by the write latency to your cluster. To publish more, run more instances.
+* **Async mode** (`KAFKA_ASYNC=true`): the Relay doesn't wait, so batches fill and a larger batch size does
+increase throughput, at the cost of delivery guarantees.
 
 ```bash
 # Optimized for Synchronous "At-Least-Once" Throughput
