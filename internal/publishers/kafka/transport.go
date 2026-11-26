@@ -88,15 +88,24 @@ func (k *Publisher) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 				)
 			}
 
-			pair, err := tls.X509KeyPair(cert, key)
+			reloader, err := newCertReloader(k.cfg.TLSCert, k.cfg.TLSKey)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to parse mTLS keypair: %w", err)
+				return nil, nil, err
 			}
-			tlsConfig.Certificates = []tls.Certificate{pair}
+			if reloader != nil {
+				tlsConfig.GetClientCertificate = reloader.GetClientCertificate
+			} else {
+				pair, err := tls.X509KeyPair(cert, key)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to parse mTLS keypair: %w", err)
+				}
+				tlsConfig.Certificates = []tls.Certificate{pair}
+			}
 		}
 	}
 
 	dialer := &kafka.Dialer{
+		ClientID:  k.clientID(),
 		Timeout:   k.cfg.ConnectionTimeout,
 		DualStack: true,
 		TLS:       tlsConfig,
@@ -120,6 +129,7 @@ func (k *Publisher) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 	}
 
 	transport := &kafka.Transport{
+		ClientID:    k.clientID(),
 		Dial:        netDialer.DialContext,
 		DialTimeout: k.cfg.ConnectionTimeout,
 		TLS:         tlsConfig,
@@ -128,4 +138,11 @@ func (k *Publisher) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 	}
 
 	return dialer, transport, nil
+}
+
+func (k *Publisher) clientID() string {
+	if k.cfg.ClientID == "" {
+		return DefaultClientID
+	}
+	return k.cfg.ClientID
 }

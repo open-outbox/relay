@@ -92,6 +92,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 
 	return kafkapub.New(kafkapub.Config{
 		Brokers:           brokers,
+		ClientID:          strings.TrimSpace(cfg.KafkaClientID),
 		MaxAttempts:       cfg.KafkaMaxAttempts,
 		WriteTimeout:      cfg.KafkaWriteTimeout,
 		ReadTimeout:       cfg.KafkaReadTimeout,

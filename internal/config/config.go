@@ -162,6 +162,11 @@ type Config struct {
 	// Default: "1s"
 	RedisWriteTimeout time.Duration `mapstructure:"REDIS_WRITE_TIMEOUT"`
 
+	// KafkaClientID identifies the relay to the brokers, e.g. in their logs,
+	// quotas and ACL audits.
+	//	Default: "open-outbox-relay"
+	KafkaClientID string `mapstructure:"KAFKA_CLIENT_ID"`
+
 	// KafkaMaxAttempts is the number of write attempts...
 	//	Default: 5
 	KafkaMaxAttempts int `mapstructure:"KAFKA_MAX_ATTEMPTS"`
@@ -396,6 +401,7 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_BATCH_BYTES", 10485760) // 10MB default
 	v.SetDefault("KAFKA_BATCH_TIMEOUT", "10ms")
 	v.SetDefault("KAFKA_CONNECTION_TIMEOUT", "10s")
+	v.SetDefault("KAFKA_CLIENT_ID", "open-outbox-relay")
 	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
 	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
