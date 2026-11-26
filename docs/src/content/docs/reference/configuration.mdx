@@ -420,10 +420,16 @@ The maximum time allowed to establish the initial TCP connection and perform the
 
 **Default:** `1`
 
-<Aside type="caution" title="Avoid Double-Batching">
-  It is recommended to keep this at `1`. Since the Relay already manages batching from the database,
-  setting this to `1` bypasses the Kafka client's internal double-batching, ensuring lower latency
-  and more predictable delivery.
+How many messages the Kafka client collects before sending them in one request.
+
+<Aside type="caution" title="Keep this at 1 in synchronous mode">
+  With `KAFKA_ASYNC=false`, the Relay publishes one event and waits for its acknowledgment before
+  sending the next, so the client's batch never holds more than one message. A value above `1`
+  doesn't batch anything: each event waits the full [`KAFKA_BATCH_TIMEOUT`](#kafka_batch_timeout)
+  for a batch that never fills, adding that delay to every event.
+
+  In async mode, the Relay doesn't wait, so batches fill and larger values do increase throughput,
+  at the cost of the delivery guarantee (see [`KAFKA_ASYNC`](#kafka_async)).
 </Aside>
 
 ---
