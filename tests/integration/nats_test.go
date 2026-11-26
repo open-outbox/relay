@@ -18,37 +18,30 @@ import (
 )
 
 func TestNatsHappyPath(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 
 	nc, natsUrl := setupNats(t)
 
-	t.Setenv("ENVIRONMENT", "production")
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "nats")
-	t.Setenv("PUBLISHER_URL", natsUrl)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("BATCH_SIZE", "10")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	setNatsRelayEnv(t, pgConnStr, natsUrl)
 
 	// Build Application via DI Container
 	di, err := container.BuildContainer(ctx)
 	require.NoError(t, err)
 
+	// The server is shared, so the stream and subjects are this test's own.
 	js, err := nc.JetStream()
+	require.NoError(t, err)
 	_, err = js.AddStream(&nats_go.StreamConfig{
-		Name:     "OPENOUTBOX_EVENTS",
-		Subjects: []string{"openoutbox.events.>"},
+		Name:     "RELAY_TESTS_HAPPY",
+		Subjects: []string{"relay-tests.happy.>"},
 	})
 	require.NoError(t, err, "Failed to create JetStream stream")
+	t.Cleanup(func() { _ = js.DeleteStream("RELAY_TESTS_HAPPY") })
 
-	// Setup Subscriber and Seed Data
-	// Using the topic name from your NATS implementation
-	topic := "openoutbox.events.v1"
+	topic := "relay-tests.happy.v1"
 	sub, err := nc.SubscribeSync(topic)
 	require.NoError(t, err)
 
@@ -58,7 +51,7 @@ func TestNatsHappyPath(t *testing.T) {
 	_, err = db.Exec(`
 		INSERT INTO openoutbox_events (event_id, event_type, payload, status)
 		VALUES ($1, $2, $3, 'PENDING')`,
-		eventID, "openoutbox.events.v1", payload)
+		eventID, topic, payload)
 	require.NoError(t, err)
 
 	err = di.Invoke(func(pub relay.Publisher) {
@@ -94,31 +87,24 @@ func TestNatsHappyPath(t *testing.T) {
 		err := db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", eventID).
 			Scan(&status)
 		return err == nil && status == "DELIVERED"
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 2*time.Second, 50*time.Millisecond)
 }
 
 func TestNats_PublisherErrorHandling(t *testing.T) {
+	db, pgConnStr := setupTestPostgres(t)
+	_, natsUrl := setupNats(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	db, pgConnStr := setupTestPostgres(t)
-	_, natsUrl := setupNats(t) // NATS is up, but we WON'T create a stream
-
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "nats")
-	t.Setenv("PUBLISHER_URL", natsUrl)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	setNatsRelayEnv(t, pgConnStr, natsUrl)
 
 	di, _ := container.BuildContainer(ctx)
 
-	// Insert an event.
-	// Since we didn't call js.AddStream(), NATS will reject the publish.
+	// No stream covers this subject, so NATS rejects the publish.
 	eventID := uuid.New()
 	_, err := db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
-                       VALUES ($1, 'openoutbox.events.v1', '{}', 'PENDING')`, eventID)
+                       VALUES ($1, 'relay-tests.nostream.v1', '{}', 'PENDING')`, eventID)
 	require.NoError(t, err)
 
 	// Start the Engine through DI
@@ -141,5 +127,5 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 
 		// We want to see attempts > 0 and status still PENDING (or DELIVERING)
 		return err == nil && attempts > 0 && status != "DELIVERED"
-	}, 5*time.Second, 200*time.Millisecond, "Engine should record failure when NATS reject publish")
+	}, 5*time.Second, 50*time.Millisecond, "Engine should record failure when NATS reject publish")
 }

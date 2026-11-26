@@ -233,11 +233,11 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 }
 
 func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers := setupKafka(t, "test.event")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	oldWorkerID := "slow-worker-99"
 	newWorkerID := "fast-worker-01" // This is what our Engine will use
@@ -246,7 +246,7 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 	// 1. CONFIG
 	t.Setenv("RELAY_ID", newWorkerID)
 	t.Setenv("LEASE_TIMEOUT", "5s")
-	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("POLL_INTERVAL", "20ms")
 	t.Setenv("STORAGE_URL", pgConnStr)
 	t.Setenv("OTEL_TRACES_EXPORTER", "none")
 	t.Setenv("OTEL_METRICS_EXPORTER", "none")
@@ -293,7 +293,7 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 
 		// We caught it! The new worker has the lock and hasn't failed yet.
 		return status == "DEAD" && lockedBy == nil
-	}, 7*time.Second, 100*time.Millisecond)
+	}, 7*time.Second, 50*time.Millisecond)
 
 	// THE ZOMBIE ATTACK
 	// Now, the OLD worker (slow-worker-99) finally finishes its "slow" publish.

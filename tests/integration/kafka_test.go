@@ -16,21 +16,15 @@ import (
 )
 
 func TestKafkaHappyPath(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	topic := "outbox.events.v1"
 
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers := setupKafka(t, topic)
 
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "kafka")
-	t.Setenv("PUBLISHER_URL", kafkaBrokers)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
 	di, err := container.BuildContainer(ctx)
 	require.NoError(t, err)
@@ -54,6 +48,7 @@ func TestKafkaHappyPath(t *testing.T) {
 		Dialer: &kafka.Dialer{
 			Timeout: 10 * time.Second,
 		},
+		MaxWait: 250 * time.Millisecond,
 	})
 	defer reader.Close()
 
@@ -76,42 +71,18 @@ func TestKafkaHappyPath(t *testing.T) {
 		db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", eventID).
 			Scan(&status)
 		return status == "DELIVERED"
-	}, 5*time.Second, 200*time.Millisecond)
-}
-
-// setKafkaRelayEnv points the relay at the given Postgres and Kafka instances.
-func setKafkaRelayEnv(t *testing.T, pgConnStr, kafkaBrokers string) {
-	t.Helper()
-	t.Setenv("STORAGE_TYPE", "postgres")
-	t.Setenv("STORAGE_URL", pgConnStr)
-	t.Setenv("PUBLISHER_TYPE", "kafka")
-	t.Setenv("PUBLISHER_URL", kafkaBrokers)
-	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("OTEL_TRACES_EXPORTER", "none")
-	t.Setenv("OTEL_METRICS_EXPORTER", "none")
-}
-
-// startKafkaEngine builds the DI container and starts the engine in the background.
-func startKafkaEngine(ctx context.Context, t *testing.T) {
-	t.Helper()
-	di, err := container.BuildContainer(ctx)
-	require.NoError(t, err)
-
-	err = di.Invoke(func(engine *relay.Engine) {
-		go func() { _ = engine.Start(ctx) }()
-	})
-	require.NoError(t, err)
+	}, 5*time.Second, 50*time.Millisecond)
 }
 
 // An unknown topic is a retryable error: Kafka returns it transiently during
 // leader moves and topic auto-creation, so the event must be scheduled for
 // retry rather than killed.
 func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers := setupKafka(t, "unused-topic")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
 	// Fail fast inside the writer, and push the retry far enough out that
@@ -141,7 +112,7 @@ func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &availableAt, &lastError)
 		return err == nil && attempts == 1
-	}, 20*time.Second, 200*time.Millisecond, "event with unknown topic should be attempted once")
+	}, 20*time.Second, 50*time.Millisecond, "event with unknown topic should be attempted once")
 
 	assert.Equal(t, "PENDING", status, "unknown topic must be retried, not killed")
 	assert.True(t, availableAt.After(insertedAt), "retry must be scheduled in the future")
@@ -152,12 +123,12 @@ func TestKafka_UnknownTopic_SchedulesRetry(t *testing.T) {
 // A message larger than the broker's limit can never succeed: the event must
 // be killed on the first attempt rather than scheduled for retry.
 func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	topic := "outbox.oversized.v1"
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers := setupKafka(t, topic)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
 	payload := oversizedKafkaPayload(t)
@@ -182,7 +153,7 @@ func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &lastError)
 		return err == nil && status == "DEAD"
-	}, 20*time.Second, 200*time.Millisecond, "oversized event should be marked DEAD")
+	}, 20*time.Second, 50*time.Millisecond, "oversized event should be marked DEAD")
 
 	assert.Equal(t, 1, attempts, "non-retryable errors must not be retried")
 	require.NotNil(t, lastError)
@@ -192,12 +163,12 @@ func TestKafka_OversizedMessage_MarksEventDead(t *testing.T) {
 // A broker outage is a retryable error: the event must go back to PENDING
 // with an incremented attempt count and an available_at in the future.
 func TestKafka_BrokerUnavailable_SchedulesRetry(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
 	topic := "outbox.retry.v1"
 	db, pgConnStr := setupTestPostgres(t)
 	kafkaBrokers, kafkaContainer := setupKafkaContainer(t, topic)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
 	setKafkaRelayEnv(t, pgConnStr, kafkaBrokers)
 
 	// Fail fast once the broker is gone, and push the retry far enough out
@@ -225,7 +196,7 @@ func TestKafka_BrokerUnavailable_SchedulesRetry(t *testing.T) {
 		err := db.QueryRow("SELECT status FROM openoutbox_events WHERE event_id = $1", warmupID).
 			Scan(&status)
 		return err == nil && status == "DELIVERED"
-	}, 20*time.Second, 200*time.Millisecond, "warm-up event should be delivered")
+	}, 20*time.Second, 50*time.Millisecond, "warm-up event should be delivered")
 
 	stopTimeout := 5 * time.Second
 	require.NoError(t, kafkaContainer.Stop(ctx, &stopTimeout))
@@ -251,7 +222,7 @@ func TestKafka_BrokerUnavailable_SchedulesRetry(t *testing.T) {
 			eventID,
 		).Scan(&status, &attempts, &availableAt, &lastError)
 		return err == nil && attempts > 0 && status != "DELIVERING"
-	}, 30*time.Second, 200*time.Millisecond, "engine should record the failed publish")
+	}, 30*time.Second, 50*time.Millisecond, "engine should record the failed publish")
 
 	assert.Equal(t, "PENDING", status, "retryable failures must not kill the event")
 	assert.Equal(t, 1, attempts)

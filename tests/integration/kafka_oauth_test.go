@@ -42,29 +42,7 @@ func TestKafkaOAuthBearer(t *testing.T) {
 
 		assertPublisherPing(t, nil)
 
-		ctx := startKafkaEngineFor(t, 60*time.Second)
-		eventID := insertKafkaEvent(t, db, "oauth.v1")
-
-		reader := kafka_go.NewReader(kafka_go.ReaderConfig{
-			Brokers:     []string{broker},
-			Topic:       "oauth.v1",
-			Partition:   0,
-			StartOffset: kafka_go.FirstOffset,
-			Dialer:      oauthTestDialer(t),
-		})
-		defer reader.Close()
-
-		msg, err := reader.ReadMessage(ctx)
-		require.NoError(t, err)
-		assert.JSONEq(t, `{"id":"`+eventID.String()+`"}`, string(msg.Value))
-
-		assert.Eventually(t, func() bool {
-			var status string
-			err := db.QueryRow(
-				"SELECT status FROM openoutbox_events WHERE event_id = $1", eventID,
-			).Scan(&status)
-			return err == nil && status == "DELIVERED"
-		}, 10*time.Second, 200*time.Millisecond, "event should be marked DELIVERED")
+		assertDelivered(t, db, broker, oauthTestDialer(t), "oauth.v1")
 	})
 
 	// An expired token is rejected by the broker, so Ping fails and the
@@ -152,7 +130,7 @@ func setupKafkaOAuth(t *testing.T, topic string) string {
 
 	// As in setupKafkaTLS, only the host-mapped "PLAINTEXT" listener is
 	// remapped, here to SASL_PLAINTEXT with OAUTHBEARER.
-	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0",
+	kafkaContainer, err := kafka.Run(ctx, kafkaImage,
 		testcontainers.WithEnv(map[string]string{
 			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":                       "BROKER:PLAINTEXT,PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT",
 			"KAFKA_LISTENER_NAME_PLAINTEXT_SASL_ENABLED_MECHANISMS":      "OAUTHBEARER",
@@ -161,7 +139,7 @@ func setupKafkaOAuth(t *testing.T, topic string) string {
 	)
 	t.Cleanup(func() {
 		if kafkaContainer != nil {
-			_ = kafkaContainer.Terminate(ctx)
+			terminate(kafkaContainer)
 		}
 	})
 	require.NoError(t, err)
@@ -170,6 +148,6 @@ func setupKafkaOAuth(t *testing.T, topic string) string {
 	require.NoError(t, err)
 	broker := brokers[0]
 
-	createKafkaTopicWithDialer(t, oauthTestDialer(t), broker, topic)
+	createKafkaTopic(t, oauthTestDialer(t), broker, topic)
 	return broker
 }
