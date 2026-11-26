@@ -88,11 +88,19 @@ func (k *Publisher) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 				)
 			}
 
-			pair, err := tls.X509KeyPair(cert, key)
+			reloader, err := newCertReloader(k.cfg.TLSCert, k.cfg.TLSKey)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to parse mTLS keypair: %w", err)
+				return nil, nil, err
 			}
-			tlsConfig.Certificates = []tls.Certificate{pair}
+			if reloader != nil {
+				tlsConfig.GetClientCertificate = reloader.GetClientCertificate
+			} else {
+				pair, err := tls.X509KeyPair(cert, key)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to parse mTLS keypair: %w", err)
+				}
+				tlsConfig.Certificates = []tls.Certificate{pair}
+			}
 		}
 	}
 

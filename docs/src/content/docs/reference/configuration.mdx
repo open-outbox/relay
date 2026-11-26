@@ -527,6 +527,10 @@ The Certificate Authority (CA) certificate used to verify the identity of the Ka
 
 The client TLS certificate used for mutual authentication (mTLS). Must be provided alongside `KAFKA_TLS_KEY`. Can be an inline raw PEM text block, a file path prefixed with `file://`, or a Base64-encoded string prefixed with `base64://`.
 
+When both `KAFKA_TLS_CERT` and `KAFKA_TLS_KEY` are `file://` paths, the Relay reads them again whenever the files change, so a rotated certificate (for example from cert-manager or Vault) is used for new connections without a restart. Open connections keep the certificate they were opened with. If the new files cannot be loaded, the Relay keeps using the previous certificate. Changes to `KAFKA_TLS_CA` still need a restart.
+
+On Kubernetes, mount the Secret as a volume (not with `subPath`, and not as environment variables): only then does Kubernetes update the files when the certificate is renewed.
+
 ---
 
 ### `KAFKA_TLS_KEY`
