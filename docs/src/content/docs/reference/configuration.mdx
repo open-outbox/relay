@@ -365,6 +365,16 @@ These settings only apply when `PUBLISHER_TYPE="kafka"`.
 
 ---
 
+### `KAFKA_CLIENT_ID`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `"open-outbox-relay"`
+
+The client ID the Relay sends to the brokers. Kafka shows it in broker logs and uses it for client quotas, so give each deployment its own (for example `billing-outbox-relay`) to tell them apart.
+
+---
+
 ### `KAFKA_MAX_ATTEMPTS`
 
 <Badge variant="note" text="Optional" /> <Badge variant="default" text="Integer" />

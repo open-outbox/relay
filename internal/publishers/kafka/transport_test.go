@@ -267,3 +267,15 @@ func TestNew_TransportConfigurations(t *testing.T) {
 		})
 	}
 }
+
+func TestNew_ClientID(t *testing.T) {
+	k, err := New(Config{Brokers: []string{"localhost:9092"}})
+	require.NoError(t, err)
+	assert.Equal(t, DefaultClientID, k.transport.ClientID)
+	assert.Equal(t, DefaultClientID, k.dialer.ClientID)
+
+	k, err = New(Config{Brokers: []string{"localhost:9092"}, ClientID: "billing-relay"})
+	require.NoError(t, err)
+	assert.Equal(t, "billing-relay", k.transport.ClientID)
+	assert.Equal(t, "billing-relay", k.dialer.ClientID)
+}

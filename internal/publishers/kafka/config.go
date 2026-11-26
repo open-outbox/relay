@@ -15,6 +15,7 @@ import (
 // driver of delivery frequency.
 type Config struct {
 	Brokers           []string
+	ClientID          string
 	MaxAttempts       int
 	WriteTimeout      time.Duration
 	ReadTimeout       time.Duration
@@ -44,3 +45,6 @@ type Config struct {
 	IdleTimeout       time.Duration
 	KeepAlive         time.Duration
 }
+
+// DefaultClientID is the client ID sent to the brokers when none is set.
+const DefaultClientID = "open-outbox-relay"
