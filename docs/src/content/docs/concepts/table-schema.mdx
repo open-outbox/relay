@@ -17,7 +17,7 @@ To support the Relay's polling, locking, and retry logic, the underlying table m
 | **`event_type`** | `TEXT` | The destination topic or subject (e.g., `user.signup`). |
 | **`partition_key`**| `TEXT` | (Optional) Used by the Relay to determine broker-side partitioning for ordering. |
 | **`payload`** | `BYTEA` | The raw message body. Stored as binary to remain data-agnostic. |
-| **`headers`** | `JSONB` | (Optional) Key-value metadata to be included in the message headers. Defaults to `{}`. |
+| **`headers`** | `JSONB` | (Optional) A flat JSON object sent as message headers. See [Headers](#headers). Defaults to `{}`. |
 | **`status`** | `TEXT` | Internal state: `PENDING`, `DELIVERING`, `DELIVERED`, or `DEAD`. |
 | **`attempts`** | `INT` | Counter for how many times the Relay has tried to publish this event. |
 | **`last_error`** | `TEXT` | Stores the error message from the last failed attempt for debugging. |
@@ -27,6 +27,23 @@ To support the Relay's polling, locking, and retry logic, the underlying table m
 | **`delivered_at`**| `TIMESTAMPTZ`| Recorded when the broker acknowledges receipt of the message. |
 | **`created_at`** | `TIMESTAMPTZ`| When the application first inserted the event into the outbox. |
 | **`updated_at`** | `TIMESTAMPTZ`| Automatically updated on every state change. |
+
+### Headers
+
+Brokers carry header values as plain strings, so `headers` must be a flat JSON object. The Relay converts each value as follows:
+
+| Value | Sent as |
+| :--- | :--- |
+| String | The string as it is: `"abc"` → `abc` |
+| Number or boolean | Its JSON text: `3` → `3`, `true` → `true` |
+| `null` | Nothing: the header is left out |
+| Object or array | Not supported: the event is marked `DEAD` with `INVALID_HEADERS` |
+
+For example, `{"trace_id": "abc", "retry": 3, "sampled": true}` is sent as the headers `trace_id: abc`, `retry: 3` and `sampled: true`.
+
+A `headers` value that is not an object, such as `[]` or `"text"`, also fails with `INVALID_HEADERS`. Retrying cannot fix the data, so these events are not retried.
+
+The Relay also sets its own headers, which replace a user header of the same name in any case. See the broker guides for [Kafka](/guides/kafka#message-headers), [NATS](/guides/nats#message-headers) and [Redis](/guides/redis#data-mapping).
 
 ---
 

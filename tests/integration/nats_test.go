@@ -49,8 +49,8 @@ func TestNatsHappyPath(t *testing.T) {
 	payload := []byte(`{"order_id": 123, "status": "paid"}`)
 
 	_, err = db.Exec(`
-		INSERT INTO openoutbox_events (event_id, event_type, payload, status)
-		VALUES ($1, $2, $3, 'PENDING')`,
+		INSERT INTO openoutbox_events (event_id, event_type, payload, headers, status)
+		VALUES ($1, $2, $3, '{"trace_id":"abc","retry":3,"skip":null}', 'PENDING')`,
 		eventID, topic, payload)
 	require.NoError(t, err)
 
@@ -79,6 +79,10 @@ func TestNatsHappyPath(t *testing.T) {
 	assert.NoError(t, err, "Should have received message on NATS")
 	require.NotNil(t, msg, "Message should not be nil")
 	assert.Equal(t, payload, msg.Data)
+	assert.Equal(t, "abc", msg.Header.Get("trace_id"))
+	assert.Equal(t, "3", msg.Header.Get("retry"), "numbers are sent as their JSON text")
+	assert.Empty(t, msg.Header.Values("skip"), "null headers are left out")
+	assert.Equal(t, eventID.String(), msg.Header.Get("Nats-Msg-Id"))
 
 	// Check DB updated to 'DELIVERED' (matching your schema status)
 	var status string

@@ -55,7 +55,8 @@ func TestKafkaHappyPath(t *testing.T) {
 	eventID := uuid.New()
 	payload := []byte(`{"type":"kafka-test"}`)
 	_, err = db.Exec(
-		`INSERT INTO openoutbox_events (event_id, event_type, payload) VALUES ($1, $2, $3)`,
+		`INSERT INTO openoutbox_events (event_id, event_type, payload, headers)
+		VALUES ($1, $2, $3, '{"trace_id":"abc","retry":3,"skip":null,"X-Event-ID":"spoofed"}')`,
 		eventID,
 		topic,
 		payload,
@@ -65,6 +66,12 @@ func TestKafkaHappyPath(t *testing.T) {
 	msg, err := reader.ReadMessage(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, payload, msg.Value)
+	// Sorted by name; null left out; the relay's X-Event-ID replaces the user's.
+	assert.Equal(t, []kafka.Header{
+		{Key: "retry", Value: []byte("3")},
+		{Key: "trace_id", Value: []byte("abc")},
+		{Key: "X-Event-ID", Value: []byte(eventID.String())},
+	}, msg.Headers)
 
 	assert.Eventually(t, func() bool {
 		var status string

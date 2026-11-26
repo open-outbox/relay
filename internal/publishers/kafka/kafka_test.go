@@ -2,10 +2,12 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
@@ -144,4 +146,43 @@ func TestNew_MetadataScopeDefaultsToAllTopics(t *testing.T) {
 	assert.Empty(t, k.transport.MetadataTopics)
 	_, err = k.mapToKafkaMessage(relay.Event{Type: "any.topic"})
 	require.NoError(t, err)
+}
+
+func TestMapToKafkaMessage_Headers(t *testing.T) {
+	k, err := New(Config{Brokers: []string{"127.0.0.1:1"}})
+	require.NoError(t, err)
+
+	id := uuid.New()
+	msg, err := k.mapToKafkaMessage(relay.Event{
+		ID:   id,
+		Type: "orders.v1",
+		Headers: json.RawMessage(
+			`{"tenant":"acme","retry":3,"sampled":true,"skip":null,"x-event-id":"spoofed"}`,
+		),
+	})
+	require.NoError(t, err)
+
+	// Sorted by name, with the user's x-event-id replaced by the relay's.
+	assert.Equal(t, []kafka.Header{
+		{Key: "retry", Value: []byte("3")},
+		{Key: "sampled", Value: []byte("true")},
+		{Key: "tenant", Value: []byte("acme")},
+		{Key: "X-Event-ID", Value: []byte(id.String())},
+	}, msg.Headers)
+}
+
+func TestKafka_Publish_NestedHeadersArePermanent(t *testing.T) {
+	// The address is never dialled: the event is rejected before any write.
+	k, err := New(Config{Brokers: []string{"127.0.0.1:1"}})
+	require.NoError(t, err)
+
+	err = k.Publish(context.Background(), relay.Event{
+		Type:    "orders.v1",
+		Headers: json.RawMessage(`{"user":{"id":1}}`),
+	})
+
+	var pubErr *relay.PublishError
+	require.ErrorAs(t, err, &pubErr)
+	assert.False(t, pubErr.IsRetryable)
+	assert.Equal(t, "INVALID_HEADERS", pubErr.Code)
 }

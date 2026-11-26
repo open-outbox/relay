@@ -36,7 +36,8 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
         INSERT INTO openoutbox_events (
             event_id, event_type, payload, partition_key, headers, status, available_at
         )
-        VALUES ($1, $2, $3, 'order-123', '{"trace_id":"abc"}', 'PENDING', NOW())`,
+        VALUES ($1, $2, $3, 'order-123',
+            '{"trace_id":"abc","retry":3,"sampled":true,"skip":null}', 'PENDING', NOW())`,
 		eventID, eventType, payload)
 	require.NoError(t, err)
 
@@ -74,6 +75,9 @@ func TestRedis_Publish_HappyPath(t *testing.T) {
 	assert.Equal(t, string(payload), values["payload"])
 	assert.Equal(t, "order-123", values["partition_key"])
 	assert.Equal(t, "abc", values["h:trace_id"], "headers are stored with an h: prefix")
+	assert.Equal(t, "3", values["h:retry"], "numbers are sent as their JSON text")
+	assert.Equal(t, "true", values["h:sampled"], "booleans are sent as their JSON text")
+	assert.NotContains(t, values, "h:skip", "null headers are left out")
 
 	// Optional: Verify DB status changed to COMPLETED (or was deleted by reaper)
 	var status string

@@ -3,7 +3,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -82,31 +81,12 @@ func (r *Publisher) Connect(ctx context.Context) error {
 // If publishing fails, it classifies the error as retryable if it indicates
 // a transient issue like network disruption or a cluster resharding event.
 func (r *Publisher) Publish(ctx context.Context, event relay.Event) error {
-	values := map[string]interface{}{
-		"id":      event.ID.String(),
-		"payload": event.Payload,
+	values, err := streamValues(event)
+	if err != nil {
+		return err
 	}
 
-	if pkey := event.GetPartitionKey(); pkey != "" {
-		values["partition_key"] = pkey
-	}
-
-	if len(event.Headers) > 0 {
-		var hMap map[string]string
-		if err := json.Unmarshal(event.Headers, &hMap); err != nil {
-			return &relay.PublishError{
-				Err:         fmt.Errorf("invalid headers json: %w", err),
-				IsRetryable: false,
-				Code:        "INVALID_HEADERS",
-			}
-		}
-		for k, v := range hMap {
-			// Prefixing with 'h:'
-			values["h:"+k] = v
-		}
-	}
-
-	err := r.client.XAdd(ctx, &redis.XAddArgs{
+	err = r.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: event.Type,
 		Values: values,
 	}).Err()
@@ -120,6 +100,26 @@ func (r *Publisher) Publish(ctx context.Context, event relay.Event) error {
 	}
 
 	return nil
+}
+
+// streamValues maps an event to the fields of a stream entry. Headers are
+// prefixed with "h:", so they cannot collide with the relay's own fields.
+func streamValues(event relay.Event) (map[string]any, error) {
+	headers, err := event.HeaderMap()
+	if err != nil {
+		return nil, err
+	}
+
+	values := make(map[string]any, len(headers)+3)
+	values["id"] = event.ID.String()
+	values["payload"] = event.Payload
+	if pkey := event.GetPartitionKey(); pkey != "" {
+		values["partition_key"] = pkey
+	}
+	for key, value := range headers {
+		values["h:"+key] = value
+	}
+	return values, nil
 }
 
 // isRedisErrorRetryable evaluates whether a Redis error is transient and warrants a retry.
