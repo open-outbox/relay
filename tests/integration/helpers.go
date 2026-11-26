@@ -136,7 +136,7 @@ func setupRedisContainer(t *testing.T) (*redis_go.Client, string, *redis.RedisCo
 	redisContainer, err := redis.Run(ctx, redisImage)
 	t.Cleanup(func() {
 		if redisContainer != nil {
-			_ = redisContainer.Terminate(context.Background())
+			terminate(redisContainer)
 		}
 	})
 	require.NoError(t, err)

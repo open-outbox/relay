@@ -38,7 +38,7 @@ func setupKafkaContainer(t *testing.T, topic string) (string, *kafka.KafkaContai
 	kafkaContainer, err := kafka.Run(ctx, kafkaImage)
 	t.Cleanup(func() {
 		if kafkaContainer != nil {
-			_ = kafkaContainer.Terminate(ctx)
+			terminate(kafkaContainer)
 		}
 	})
 	require.NoError(t, err)

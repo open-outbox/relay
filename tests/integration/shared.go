@@ -66,8 +66,15 @@ func (s *shared[T]) get(t *testing.T) T {
 
 func (s *shared[T]) stop() {
 	if s.container != nil {
-		_ = s.container.Terminate(context.Background())
+		terminate(s.container)
 	}
+}
+
+// terminate removes c without waiting for a graceful stop. Test containers
+// hold nothing worth shutting down cleanly, and Kafka takes about 10s to.
+// Callers check for nil first: a nil *KafkaContainer is not a nil interface.
+func terminate(c testcontainers.Container) {
+	_ = c.Terminate(context.Background(), testcontainers.StopTimeout(0))
 }
 
 type postgresServer struct {

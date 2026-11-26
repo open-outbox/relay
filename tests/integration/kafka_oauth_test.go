@@ -139,7 +139,7 @@ func setupKafkaOAuth(t *testing.T, topic string) string {
 	)
 	t.Cleanup(func() {
 		if kafkaContainer != nil {
-			_ = kafkaContainer.Terminate(ctx)
+			terminate(kafkaContainer)
 		}
 	})
 	require.NoError(t, err)
