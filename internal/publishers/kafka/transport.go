@@ -129,12 +129,14 @@ func (k *Publisher) buildTransport() (*kafka.Dialer, *kafka.Transport, error) {
 	}
 
 	transport := &kafka.Transport{
-		ClientID:    k.clientID(),
-		Dial:        netDialer.DialContext,
-		DialTimeout: k.cfg.ConnectionTimeout,
-		TLS:         tlsConfig,
-		SASL:        dialer.SASLMechanism,
-		IdleTimeout: k.cfg.IdleTimeout,
+		ClientID:       k.clientID(),
+		Dial:           netDialer.DialContext,
+		DialTimeout:    k.cfg.ConnectionTimeout,
+		TLS:            tlsConfig,
+		SASL:           dialer.SASLMechanism,
+		IdleTimeout:    k.cfg.IdleTimeout,
+		MetadataTopics: k.cfg.MetadataTopics,
+		MetadataTTL:    k.cfg.MetadataTTL,
 	}
 
 	return dialer, transport, nil

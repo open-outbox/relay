@@ -21,6 +21,9 @@ type Publisher struct {
 	dialer     *kafka.Dialer
 	transport  *kafka.Transport
 	pingCursor atomic.Uint32
+
+	// metadataTopics is cfg.MetadataTopics as a set; nil allows any topic.
+	metadataTopics map[string]struct{}
 }
 
 // New builds the Kafka writer from cfg. It expects cfg.Brokers to hold
@@ -40,6 +43,13 @@ func New(cfg Config) (*Publisher, error) {
 	cfg.SASLMechanism = strings.ToLower(strings.TrimSpace(cfg.SASLMechanism))
 
 	k := &Publisher{cfg: cfg}
+
+	if len(cfg.MetadataTopics) > 0 {
+		k.metadataTopics = make(map[string]struct{}, len(cfg.MetadataTopics))
+		for _, topic := range cfg.MetadataTopics {
+			k.metadataTopics[topic] = struct{}{}
+		}
+	}
 
 	dialer, transport, err := k.buildTransport()
 	if err != nil {
@@ -214,6 +224,21 @@ func (k *Publisher) mapToKafkaMessage(event relay.Event) (kafka.Message, error) 
 			Err:         errors.New("event type is empty, so there is no topic to publish to"),
 			IsRetryable: false,
 			Code:        "INVALID_TOPIC",
+		}
+	}
+
+	// The writer only knows the topics in its metadata cache, so without this
+	// check the event would fail with Kafka's misleading "unknown topic"
+	// error. It stays retryable: adding the topic and restarting delivers it.
+	if k.metadataTopics != nil {
+		if _, ok := k.metadataTopics[event.Type]; !ok {
+			return kafka.Message{}, &relay.PublishError{
+				Err: fmt.Errorf(
+					"topic %q is not listed in KAFKA_METADATA_TOPICS", event.Type,
+				),
+				IsRetryable: true,
+				Code:        "TOPIC_NOT_IN_METADATA",
+			}
 		}
 	}
 

@@ -99,3 +99,49 @@ func TestKafka_Publish_EmptyTypeIsPermanent(t *testing.T) {
 		})
 	}
 }
+
+func TestNew_MetadataScope(t *testing.T) {
+	k, err := New(Config{
+		Brokers:        []string{"127.0.0.1:1"},
+		MetadataTopics: []string{"orders.v1", "payments.v1"},
+		MetadataTTL:    30 * time.Second,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"orders.v1", "payments.v1"}, k.transport.MetadataTopics)
+	assert.Equal(t, 30*time.Second, k.transport.MetadataTTL)
+
+	t.Run("listed topic is mapped", func(t *testing.T) {
+		msg, err := k.mapToKafkaMessage(relay.Event{Type: "orders.v1"})
+		require.NoError(t, err)
+		assert.Equal(t, "orders.v1", msg.Topic)
+	})
+
+	// The address is never dialled: the event is rejected before any write.
+	calls := map[string]func() error{
+		"Publish": func() error {
+			return k.Publish(context.Background(), relay.Event{Type: "other.v1"})
+		},
+		"PublishBatch": func() error {
+			return k.PublishBatch(context.Background(), []relay.Event{{Type: "other.v1"}})
+		},
+	}
+	for name, publish := range calls {
+		t.Run(name+" rejects unlisted topic", func(t *testing.T) {
+			var pubErr *relay.PublishError
+			require.ErrorAs(t, publish(), &pubErr)
+			assert.True(t, pubErr.IsRetryable)
+			assert.Equal(t, "TOPIC_NOT_IN_METADATA", pubErr.Code)
+			assert.Contains(t, pubErr.Error(), `"other.v1"`)
+		})
+	}
+}
+
+func TestNew_MetadataScopeDefaultsToAllTopics(t *testing.T) {
+	k, err := New(Config{Brokers: []string{"127.0.0.1:1"}})
+	require.NoError(t, err)
+
+	assert.Empty(t, k.transport.MetadataTopics)
+	_, err = k.mapToKafkaMessage(relay.Event{Type: "any.topic"})
+	require.NoError(t, err)
+}

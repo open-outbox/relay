@@ -680,6 +680,32 @@ The keep-alive period for an active network connection to a Kafka broker. A valu
 
 ---
 
+### `KAFKA_METADATA_TOPICS`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default:** `""` (all topics)
+
+A comma-separated list of the topics the Relay publishes to, for example `orders.v1,payments.v1`.
+
+By default the Kafka client fetches metadata for every topic in the cluster on each refresh (see `KAFKA_METADATA_TTL`). On a cluster with many topics or partitions, that is a large response fetched every few seconds by each Relay instance. Setting this list limits the metadata to the topics named.
+
+The client can only publish to topics in its metadata, so an event for any other topic fails with the retryable code `TOPIC_NOT_IN_METADATA` and stays in the outbox. Add the topic to the list and restart the Relay to deliver it. If your events can target topics you don't know in advance, leave this empty.
+
+---
+
+### `KAFKA_METADATA_TTL`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="Duration" />
+
+**Default:** `6s`
+
+How often the Kafka client refreshes cluster metadata. Each refresh happens after a random delay of up to this value, so instances don't refresh in sync.
+
+Metadata is refreshed only on this timer, not after errors. A longer value means fewer metadata requests, but after a partition leader moves, publishes to that partition fail (and are retried) until the next refresh. New partitions and topics are also picked up later. On large clusters, `30s` is a reasonable trade-off; on most clusters the default is fine.
+
+---
+
 ## Observability (OpenTelemetry)
 
 These settings control how the Relay exports traces and metrics to your observability stack.
