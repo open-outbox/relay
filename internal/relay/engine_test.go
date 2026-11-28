@@ -333,3 +333,35 @@ func TestNewEngine_ShutdownTimeout(t *testing.T) {
 	assert.Equal(t, defaultShutdownTimeout, build(0).ShutdownTimeout(), "zero uses the default")
 	assert.Equal(t, 25*time.Second, build(25*time.Second).ShutdownTimeout())
 }
+
+// A failed Ping makes the engine call Connect, so a publisher whose
+// connection was closed for good can reopen it. A passing Ping does not.
+func TestEngine_MonitorHealth_ReconnectsAfterFailedPing(t *testing.T) {
+	tm, err := CreateNoopTelemetry()
+	require.NoError(t, err)
+
+	pub := new(MockPublisher)
+	pub.On("Ping", mock.Anything).Return(errors.New("connection closed")).Once()
+	// Once: a further Connect, on a tick whose Ping passed, would panic.
+	pub.On("Connect", mock.Anything).Return(nil).Once()
+	pub.On("Ping", mock.Anything).Return(nil)
+
+	e, err := NewEngine(new(MockStorage), pub, EngineParams{
+		BatchSize:           1,
+		HealthCheckInterval: 5 * time.Millisecond,
+	}, tm)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- e.monitorHealth(ctx) }()
+
+	// Starts unhealthy: the first tick fails and reconnects, a later one resumes.
+	require.Eventually(t, e.isHealthy.Load, time.Second, time.Millisecond)
+	time.Sleep(20 * time.Millisecond) // a few passing ticks, which must not reconnect
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+
+	pub.AssertExpectations(t)
+	pub.AssertNumberOfCalls(t, "Connect", 1)
+}

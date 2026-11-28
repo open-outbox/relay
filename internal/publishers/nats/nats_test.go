@@ -1,8 +1,10 @@
 package nats
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -64,4 +66,28 @@ func TestNewMsg_InvalidHeaders(t *testing.T) {
 			assert.Equal(t, "INVALID_HEADERS", pubErr.Code)
 		})
 	}
+}
+
+// Before Connect there is no session: Publish must return a retryable
+// error instead of dereferencing a nil connection, and Ping must fail.
+func TestPublisher_BeforeConnect(t *testing.T) {
+	p, err := New("nats://127.0.0.1:1", time.Second, time.Second)
+	require.NoError(t, err)
+
+	err = p.Publish(context.Background(), relay.Event{ID: uuid.New(), Type: "orders.v1"})
+	var pErr *relay.PublishError
+	require.ErrorAs(t, err, &pErr)
+	assert.True(t, pErr.IsRetryable)
+	assert.Equal(t, "NATS_NOT_CONNECTED", pErr.Code)
+
+	assert.ErrorIs(t, p.Ping(context.Background()), errNotConnected)
+	assert.NoError(t, p.Close(context.Background()), "Close without a connection")
+}
+
+// After Close the engine's health loop must not reopen the connection.
+func TestPublisher_ConnectAfterClose(t *testing.T) {
+	p, err := New("nats://127.0.0.1:1", time.Second, time.Second)
+	require.NoError(t, err)
+	require.NoError(t, p.Close(context.Background()))
+	assert.ErrorIs(t, p.Connect(context.Background()), errPublisherClosed)
 }

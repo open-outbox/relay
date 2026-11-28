@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -19,15 +21,27 @@ import (
 // that are backed by a JetStream stream for durability.
 type Publisher struct {
 	url               string
-	conn              *nats.Conn
-	js                nats.JetStreamContext
 	connectionTimeout time.Duration
 	publishTimeout    time.Duration
+
+	mu      sync.Mutex
+	closed  bool
+	session atomic.Pointer[session]
 }
 
-// New establishes a connection to a NATS server and initializes a JetStream context.
-// It sets a client name "Open-Outbox-Relay" on the connection to facilitate easier
-// identification in NATS monitoring tools.
+// session is one NATS connection and the JetStream context built on it.
+// They are stored together, so a reader never sees one without the other.
+type session struct {
+	conn *nats.Conn
+	js   nats.JetStreamContext
+}
+
+var (
+	errNotConnected    = errors.New("nats publisher is not connected")
+	errPublisherClosed = errors.New("nats publisher is closed")
+)
+
+// New builds a new NATS publisher. No connection is opened here; call Connect.
 func New(url string, publishTimeout, connectionTimeout time.Duration) (*Publisher, error) {
 
 	if url == "" {
@@ -41,27 +55,44 @@ func New(url string, publishTimeout, connectionTimeout time.Duration) (*Publishe
 	}, nil
 }
 
-// Connect establishes the connection to the NATS server.
+// Connect opens a connection to the NATS server. The engine calls it at
+// startup and again whenever Ping fails, so it handles three cases:
+//
+//   - No connection yet, or the current one is closed (nats.go stopped
+//     reconnecting and will never use it again): open a new connection.
+//   - A connection that is connected or reconnecting: do nothing. nats.go
+//     reconnects by itself, and opening a second one would leak the first.
+//   - Close was called: return an error, so a health check during shutdown
+//     cannot reopen the connection.
+//
+// The connection is named "Open-Outbox-Relay" in NATS monitoring tools.
 func (n *Publisher) Connect(_ context.Context) error {
-	if n.conn != nil && n.conn.IsConnected() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.closed {
+		return errPublisherClosed
+	}
+	if s := n.session.Load(); s != nil && !s.conn.IsClosed() {
 		return nil
 	}
+
 	nc, err := nats.Connect(
 		n.url,
 		nats.Timeout(n.connectionTimeout),
 		nats.Name("Open-Outbox-Relay"),
 		nats.MaxReconnects(-1),
+		nats.IgnoreAuthErrorAbort(),
 	)
 	if err != nil {
 		return fmt.Errorf("nats connection failed: %w", err)
 	}
-	n.conn = nc
 	js, err := nc.JetStream()
 	if err != nil {
 		nc.Close()
 		return fmt.Errorf("failed to load JetStream: %w", err)
 	}
-	n.js = js
+	n.session.Store(&session{conn: nc, js: js})
 	return nil
 }
 
@@ -71,14 +102,17 @@ func (n *Publisher) Connect(_ context.Context) error {
 // It automatically sets the "Nats-Msg-Id" header using the Event ID to enable
 // JetStream's built-in idempotent publishing (message deduplication).
 //
-// If the connection is closed or the publish fails, it returns a relay.PublishError,
-// classifying the failure as retryable based on NATS-specific error codes.
+// If there is no open connection or the publish fails, it returns a
+// relay.PublishError, classifying the failure as retryable based on
+// NATS-specific error codes.
 func (n *Publisher) Publish(ctx context.Context, event relay.Event) error {
-	if n.conn.IsClosed() {
+	s := n.session.Load()
+	if s == nil || s.conn.IsClosed() {
+		// Retryable: the engine reconnects after its next failed health check.
 		return &relay.PublishError{
-			Err:         errors.New("nats: connection closed permanently"),
+			Err:         errNotConnected,
 			IsRetryable: true,
-			Code:        "NATS_FATAL_CLOSED",
+			Code:        "NATS_NOT_CONNECTED",
 		}
 	}
 
@@ -90,7 +124,7 @@ func (n *Publisher) Publish(ctx context.Context, event relay.Event) error {
 	pubCtx, cancel := context.WithTimeout(ctx, n.publishTimeout)
 	defer cancel()
 
-	_, err = n.js.PublishMsg(msg, nats.Context(pubCtx))
+	_, err = s.js.PublishMsg(msg, nats.Context(pubCtx))
 
 	if err != nil {
 		return &relay.PublishError{
@@ -158,29 +192,30 @@ func validateHeaderName(name string) error {
 	return nil
 }
 
-// Close gracefully shuts down the NATS connection.
+// Close shuts down the NATS connection. Connect fails afterwards, so the
+// publisher cannot be reopened.
 func (n *Publisher) Close(_ context.Context) error {
-	if n.conn != nil {
-		n.conn.Close()
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.closed = true
+	if s := n.session.Load(); s != nil {
+		s.conn.Close()
 	}
 	return nil
 }
 
-// Ping verifies the connectivity to the NATS server. It checks if the
-// underlying connection is active and capable of communicating with
-// the NATS cluster.
+// Ping reports whether the connection to the NATS server is up. It only
+// reads the connection's state: reconnecting is left to the client and the
+// engine, so health checks have no side effects.
 func (n *Publisher) Ping(_ context.Context) error {
-	if n.conn == nil || !n.conn.IsConnected() {
-		return fmt.Errorf("nats connection is not active")
+	s := n.session.Load()
+	if s == nil {
+		return errNotConnected
 	}
-
-	// For a more robust check, we ensure the connection isn't currently
-	// in a reconnecting or closed state.
-	status := n.conn.Status()
-	if status != nats.CONNECTED {
+	if status := s.conn.Status(); status != nats.CONNECTED {
 		return fmt.Errorf("nats connection status is %s", status.String())
 	}
-
 	return nil
 }
 

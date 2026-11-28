@@ -28,6 +28,10 @@ type Publisher interface {
 	// Connect establishes the initial connection to the message broker.
 	// It should perform handshakes, authenticate, and initialize necessary
 	// resources (like NATS JetStream contexts or Kafka writers).
+	//
+	// The engine calls it again whenever Ping fails, so it must be safe to
+	// call repeatedly and concurrently with Publish and Ping: a no-op while
+	// the connection is usable, and reopening it if it is gone for good.
 	Connect(ctx context.Context) error
 
 	// Publish sends a single event to the downstream system.
@@ -41,5 +45,6 @@ type Publisher interface {
 
 	// Ping verifies the connectivity to the message broker (e.g., Kafka, NATS).
 	// It ensures the publisher is authenticated and capable of sending messages.
+	// It must only check, never reconnect: the HTTP readiness probe calls it too.
 	Ping(ctx context.Context) error
 }
