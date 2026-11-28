@@ -714,6 +714,9 @@ func (e *Engine) monitorHealth(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if err := e.publisher.Ping(ctx); err != nil {
+				if cerr := e.publisher.Connect(ctx); cerr != nil {
+					e.logger.Debug("publisher reconnect failed", zap.Error(cerr))
+				}
 				if e.isHealthy.Swap(false) {
 					e.metrics.RelayStateGauge.Record(ctx, int64(StatePaused),
 						metric.WithAttributes(
